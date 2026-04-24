@@ -4094,22 +4094,65 @@ function inferAnon(row) {
 
 function parseImportDate(val) {
   if(!val) return '';
-  if(val instanceof Date) return val.toISOString().split('T')[0];
+  
+  // FIRST: If it's a Date object, use it directly
+  if(val instanceof Date) {
+    const result = val.toISOString().split('T')[0];
+    console.log(`[DATE OBJECT] → ${result}`);
+    return result;
+  }
+  
   const s = String(val).trim();
+  console.log(`[PARSE] Input: "${s}"`);
+  
+  // YYYY-MM-DD HH:MM:SS (datetime ISO with space)
+  // This is the MOST COMMON format from Excel
+  const mISO = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+\d{2}:\d{2}:\d{2}/);
+  if(mISO) {
+    const result = `${mISO[1]}-${mISO[2]}-${mISO[3]}`;
+    console.log(`[ISO DATETIME] ${s} → ${result}`);
+    return result;
+  }
+  
+  // ISO YYYY-MM-DD with time (e.g. "2025-11-28 12:04:14" or "2025-11-28T12:04:14")
+  const mISO2 = s.match(/^(\d{4})-(\d{2})-(\d{2})[\sT]\d{1,2}:\d{2}/);
+  if(mISO2) {
+    const result = `${mISO2[1]}-${mISO2[2]}-${mISO2[3]}`;
+    console.log(`[ISO SHORT] ${s} → ${result}`);
+    return result;
+  }
 
   // Excel serial number (e.g. 45000)
   if(/^\d{5}$/.test(s)) {
     const d = new Date((parseInt(s)-25569)*86400*1000);
-    return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
+    const result = isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
+    console.log(`[SERIAL] ${s} → ${result}`);
+    return result;
   }
 
   // ISO YYYY-MM-DD (with or without time)
-  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0,10);
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const result = s.substring(0,10);
+    console.log(`[ISO SIMPLE] ${s} → ${result}`);
+    return result;
+  }
 
-  // Google Forms: M/D/YYYY H:MM or MM/DD/YYYY HH:MM  e.g. "4/16/2026 10:14"
-  const mGF = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+\d{1,2}:\d{2}/);
+  // Google Forms: M/D/YYYY or M/D/YY H:MM (with 4 or 2 digit year)
+  const mGF = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})/);
   if(mGF) {
-    return `${mGF[3]}-${mGF[1].padStart(2,'0')}-${mGF[2].padStart(2,'0')}`;
+    const year = mGF[3].length === 2 ? '20' + mGF[3] : mGF[3];
+    const result = `${year}-${mGF[1].padStart(2,'0')}-${mGF[2].padStart(2,'0')}`;
+    console.log(`[GOOGLE FORMS] ${s} → ${result}`);
+    return result;
+  }
+
+  // Alternative: M/D/YYYY or M/D/YY without strict hour/minute pattern (just look for slash-slash-digits)
+  const mSimple = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if(mSimple) {
+    const year = mSimple[3].length === 2 ? '20' + mSimple[3] : mSimple[3];
+    const result = `${year}-${mSimple[1].padStart(2,'0')}-${mSimple[2].padStart(2,'0')}`;
+    console.log(`[SIMPLE SLASH] ${s} → ${result}`);
+    return result;
   }
 
   // DD/MM/YYYY or MM/DD/YYYY without time
@@ -4118,17 +4161,34 @@ function parseImportDate(val) {
     const y = m[3].length===2 ? '20'+m[3] : m[3];
     const p1 = parseInt(m[1]);
     // If first part > 12 it must be DD/MM/YYYY
-    if(p1 > 12) return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    if(p1 > 12) {
+      const result = `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+      console.log(`[DD/MM/YYYY] ${s} → ${result}`);
+      return result;
+    }
     // Otherwise MM/DD/YYYY (Google Forms default US format)
-    return `${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    const result = `${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    console.log(`[MM/DD/YYYY] ${s} → ${result}`);
+    return result;
   }
 
+  console.log(`[NO MATCH] "${s}"`);
   return '';
 }
 
 function buildImportPreview(rawRows) {
   const existingIds = new Set(DB.denuncias.map(d=>d.id));
   const parsed = [];
+
+  // DEBUG: Log first row column names
+  if(rawRows.length > 0) {
+    console.log('=== DEBUG: Column names detected ===');
+    console.log(Object.keys(rawRows[0]));
+    console.log('=== DEBUG: First row values ===');
+    Object.keys(rawRows[0]).forEach(k => {
+      console.log(`"${k}": "${rawRows[0][k]}"`);
+    });
+  }
 
   for(const row of rawRows) {
     const idRaw = findCol(row, ['id','Id','ID']);
@@ -4137,18 +4197,33 @@ function buildImportPreview(rawRows) {
     if(isNaN(id)) continue;
 
     // Try multiple column names for date (Google Forms, Excel, custom)
+    // CRITICAL: "Hora de início" is the EVENT START TIME (real date), must come FIRST
+    // NOT "Data de recebimento" which is today's upload date
     const dateRaw = findCol(row, [
-      'hora de início','hora de inicio','hora de iníc','timestamp','carimbo de data/hora',
-      'carimbo de data','data e hora','data/hora','data','date','recebida em','recebido em',
-      'hora de envio','hora envio'
+      'hora de início','hora de inicio','hora de iníc','data do fato','relatado em','data relato','fato relatado em',
+      'timestamp','carimbo de data/hora','carimbo de data','data e hora','data/hora','data','date',
+      'recebida em','recebido em','hora de envio','hora envio'
     ]) || (() => {
       // Last resort: find any cell that looks like a date
+      // Prioritize cells that look like actual datetimes with HH:MM pattern
+      for(const k of Object.keys(row)) {
+        const v = String(row[k]||'').trim();
+        // Look for YYYY-MM-DD HH:MM pattern FIRST (most likely real datetime)
+        if(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(v)) return v;
+      }
+      // Then look for simple dates
       for(const k of Object.keys(row)) {
         const v = String(row[k]||'').trim();
         if(/^\d{1,2}\/\d{1,2}\/\d{4}/.test(v) || /^\d{4}-\d{2}-\d{2}/.test(v)) return v;
       }
       return '';
     })();
+    
+    // DEBUG: Log what was found
+    if(id < 20) {
+      console.log(`Row ${id}: dateRaw="${dateRaw}"`);
+    }
+    
     const dataStr = parseImportDate(dateRaw) || new Date().toISOString().split('T')[0];
     const year = dataStr ? parseInt(dataStr.substring(0,4)) : new Date().getFullYear();
     const proto = `DN-${year}-${String(id).padStart(3,'0')}`;
