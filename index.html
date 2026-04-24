@@ -6281,7 +6281,7 @@ function pjRender(info,cnpjNum,apiName){
   </div>
   <div class="dd-disc">⚠️ Busca exata com aspas duplas · Queries booleanas para mídias negativas eliminam ruído de redes sociais · Indicadores via DuckDuckGo (pode ter imprecisões) · Não substitui due diligence jurídica · ${dtStr}</div>
   <div style="display:flex;gap:10px;margin-top:14px">
-    <button class="btn btn-accent" onclick="ddAnalisarComIA('${razao}','${cnpjFmt}','${nivel}',${scoreRisco},${alertas.length},${atencao.length},'${info.situacao||''}','${info.porte||''}','${info.capital||''}','${info.abertura||''}')" style="flex:1;justify-content:center">🤖 Análise Profunda com IA — Gemini</button>
+    <button class="btn btn-accent" onclick="alert('Análise com IA desativada para economizar créditos')" style="flex:1;justify-content:center">🤖 Análise Profunda com IA — Gemini</button>
     <button class="btn btn-outline" onclick="window.print()" style="justify-content:center">🖨️ PDF</button>
   </div>
   <div id="dd-ai-result" style="display:none;margin-top:16px"></div>`;
@@ -6294,9 +6294,7 @@ function pjRender(info,cnpjNum,apiName){
 }
 
 // ── ANÁLISE IA — Due Diligence ──────────────
-async function ddAnalisarComIA(razao,cnpj,nivel,score,alertas,atencao,situacao,porte,capital,abertura){
-  const GEMINI_KEY='AIzaSyB6ZjO_Lj9AhpphMZtwUKYeQdzRWLu6Qm8';
-  const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key='+GEMINI_KEY;
+async function alert('Análise com IA desativada para economizar créditos'){
   const panel=document.getElementById('dd-ai-result');
   if(!panel) return;
   panel.style.display='block';
@@ -8111,8 +8109,6 @@ function rmDeleteUnit(idx) {
 async function aiAnalisarRiscos() {
   const btn=document.getElementById('btn-ai-risco');
   if(btn){btn.disabled=true;btn.textContent='⏳ Analisando...';}
-  const GEMINI_KEY='AIzaSyB6ZjO_Lj9AhpphMZtwUKYeQdzRWLu6Qm8';
-  const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key='+GEMINI_KEY;
   const riscos=(DB.riscos||[]);
   const lista=riscos.map(r=>`[${r.unidade||'?'}] ${r.desc} P:${r.prob} I:${r.impacto} Controle:${r.controle||'Nenhum'}`).join('\n');
   const prompt=`Você é especialista em gestão de riscos da Torre e Cia Supermercados.\nAnalise esta matriz de ${riscos.length} riscos e forneça:\n## Riscos Críticos\n## Lacunas nos Controles\n## 3 Recomendações Prioritárias\n## Score de Risco Geral: X/10\n\nRISCOS:\n${lista}\n\nResponda em português.`;
