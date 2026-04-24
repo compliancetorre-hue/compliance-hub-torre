@@ -6217,7 +6217,54 @@ function pjRender(info,cnpjNum,apiName){
 }
 
 // ── ANÁLISE IA — Due Diligence ──────────────
-catch(e){
+  const panel=document.getElementById('dd-ai-result');
+  if(!panel) return;
+  panel.style.display='block';
+  panel.innerHTML=`<div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:12px 16px;border-radius:10px 10px 0 0;display:flex;align-items:center;gap:10px"><span style="color:#fff;font-weight:700">🤖 Análise Profunda com Gemini IA</span><div style="margin-left:auto;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite"></div></div><div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px;padding:16px;font-size:.85rem;line-height:1.8;color:#374151">⏳ Analisando a empresa com inteligência artificial...</div>`;
+
+  const prompt=`Você é um especialista em due diligence corporativa e análise de risco contratual brasileiro. Analise a empresa abaixo e forneça um parecer profissional completo como se estivesse preparando um relatório executivo para um diretor decidir se fecha ou não um contrato.
+
+EMPRESA ANALISADA:
+- Razão Social: ${razao}
+- CNPJ: ${cnpj}
+- Situação Receita Federal: ${situacao}
+- Porte: ${porte}
+- Capital Social: ${capital}
+- Data de Abertura: ${abertura}
+- Score de Risco Calculado: ${score} pontos
+- Nível de Risco: ${nivel.toUpperCase()}
+- Alertas Críticos: ${alertas}
+- Pontos de Atenção: ${atencao}
+
+Forneça uma análise estruturada com:
+
+## 1. PARECER EXECUTIVO (3-4 linhas diretas e objetivas)
+
+## 2. PRINCIPAIS RISCOS IDENTIFICADOS
+Liste os riscos mais relevantes com base nos dados cadastrais.
+
+## 3. PONTOS QUE PRECISAM SER INVESTIGADOS
+O que verificar obrigatoriamente antes de assinar.
+
+## 4. CLÁUSULAS CONTRATUAIS RECOMENDADAS
+Quais proteções incluir no contrato caso decida avançar.
+
+## 5. VEREDICTO FINAL
+Uma linha clara: APROVAR / APROVAR COM RESSALVAS / REPROVAR — com justificativa objetiva.
+
+Seja direto, profissional e objetivo. Use linguagem executiva. Responda em português.`;
+
+  try{
+    const d=await r.json();
+    const txt=d.candidates?.[0]?.content?.parts?.[0]?.text||'Sem resposta';
+    // Format markdown to HTML
+    const html=txt
+      .replace(/## (.+)/g,'<h3 style="color:#4f46e5;font-size:.9rem;font-weight:800;margin:14px 0 6px;border-bottom:2px solid #e0e7ff;padding-bottom:4px">$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\n- /g,'<br>• ')
+      .replace(/\n/g,'<br>');
+    panel.innerHTML=`<div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:12px 16px;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:space-between"><span style="color:#fff;font-weight:700">🤖 Análise Profunda com Gemini IA</span><button onclick="document.getElementById('dd-ai-result').style.display='none'" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:50%;width:24px;height:24px;cursor:pointer">✕</button></div><div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px;padding:16px;font-size:.85rem;line-height:1.8;color:#374151">${html}</div>`;
+  }catch(e){
     panel.innerHTML=`<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px;color:#991b1b">❌ Erro ao consultar IA: ${e.message}</div>`;
   }
 }
@@ -7979,7 +8026,22 @@ function rmDeleteUnit(idx) {
   rmUpdateRiscoModalUnits();
   rmUpdatePlanoModalUnits();
 }
- catch(e) {
+// ── AI análise de riscos (stub — conecta com Gemini se chave configurada)
+  if(btn){btn.disabled=true;btn.textContent='⏳ Analisando...';}
+  const riscos=(DB.riscos||[]);
+  const lista=riscos.map(r=>`[${r.unidade||'?'}] ${r.desc} P:${r.prob} I:${r.impacto} Controle:${r.controle||'Nenhum'}`).join('\n');
+  const prompt=`Você é especialista em gestão de riscos da Torre e Cia Supermercados.\nAnalise esta matriz de ${riscos.length} riscos e forneça:\n## Riscos Críticos\n## Lacunas nos Controles\n## 3 Recomendações Prioritárias\n## Score de Risco Geral: X/10\n\nRISCOS:\n${lista}\n\nResponda em português.`;
+  let panel=document.getElementById('ai-risco-panel');
+  if(!panel){panel=document.createElement('div');panel.id='ai-risco-panel';panel.style.cssText='position:fixed;bottom:20px;right:20px;width:480px;max-width:95vw;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.25);border-radius:12px;overflow:hidden;max-height:80vh;display:flex;flex-direction:column';document.body.appendChild(panel);}
+  panel.style.display='flex';
+  panel.innerHTML='<div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:11px 16px;display:flex;align-items:center;justify-content:space-between"><span style="color:#fff;font-weight:700;font-size:.88rem">🤖 Análise de Risco — Gemini AI</span><button onclick="this.closest(\'#ai-risco-panel\').style.display=\'none\'" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:50%;width:24px;height:24px;cursor:pointer">✕</button></div><div id="ai-risco-body" style="padding:16px;background:#fff;overflow-y:auto;font-size:.85rem;line-height:1.7;flex:1">⏳ Analisando...</div>';
+  try {
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    const txt=d.candidates?.[0]?.content?.parts?.[0]?.text||'Sem resposta.';
+    const body=document.getElementById('ai-risco-body');
+    if(body) body.innerHTML=txt.replace(/\n/g,'<br>').replace(/## (.*?)(<br>|$)/g,'<strong style="color:var(--primary);display:block;margin:10px 0 4px">$1</strong>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+  } catch(e) {
     const body=document.getElementById('ai-risco-body');
     if(body) body.innerHTML='<span style="color:var(--danger)">❌ '+e.message+'</span>';
   }
