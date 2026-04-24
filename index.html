@@ -778,25 +778,43 @@
       <span class="icon">🔍</span> Due Diligence
     </a>
   </nav>
-  <div style="padding:10px 16px 4px">
-    <button onclick="openAdminPanel()" style="width:100%;padding:9px 14px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:8px;transition:all .15s" onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='rgba(255,255,255,.07)'">
-      ⚙️ Gerenciar Dados
-    </button>
-    <button id="nav-permissoes" onclick="abrirGerenciarPermissoes()" style="display:none;width:100%;margin-top:5px;padding:9px 14px;border-radius:8px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.35);color:rgba(196,168,255,.9);font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit;align-items:center;gap:8px;transition:all .15s" onmouseover="this.style.background='rgba(139,92,246,.28)'" onmouseout="this.style.background='rgba(139,92,246,.15)'">
-      🔐 Permissões de Acesso
-    </button>
-    <button id="nav-usuarios" onclick="abrirGerenciarUsuarios()" style="display:none;width:100%;margin-top:5px;padding:9px 14px;border-radius:8px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:rgba(110,231,183,.9);font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit;align-items:center;gap:8px;transition:all .15s" onmouseover="this.style.background='rgba(16,185,129,.22)'" onmouseout="this.style.background='rgba(16,185,129,.12)'">
-      👥 Gerenciar Usuários
-    </button>
-    <button id="nav-audit" onclick="abrirLogs()" style="display:none;width:100%;margin-top:5px;padding:9px 14px;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:rgba(252,165,165,.9);font-size:.8rem;font-weight:600;cursor:pointer;font-family:inherit;align-items:center;gap:8px;transition:all .15s" onmouseover="this.style.background='rgba(239,68,68,.22)'" onmouseout="this.style.background='rgba(239,68,68,.12)'">
-      📋 Logs de Auditoria
-    </button>
-    <button id="nav-minha-senha" onclick="abrirAlterarMinhaSenha()" style="width:100%;margin-top:5px;padding:7px 14px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.55);font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:8px;transition:all .15s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">
-      🔑 Alterar Minha Senha
-    </button>
-    <button onclick="forceResetCache()" style="width:100%;margin-top:5px;padding:7px 14px;border-radius:8px;background:rgba(255,140,50,.15);border:1px solid rgba(255,140,50,.3);color:rgba(255,180,120,.9);font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:8px;transition:all .15s" onmouseover="this.style.background='rgba(255,140,50,.28)'" onmouseout="this.style.background='rgba(255,140,50,.15)'">
-      🔄 Recarregar Dados
-    </button>
+  <div style="padding:8px 12px 4px;border-top:1px solid rgba(255,255,255,.08);margin-top:4px">
+    <!-- Botões compactos em grade 3x2 -->
+    <div id="nav-admin-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px">
+      <button id="nav-permissoes" onclick="abrirGerenciarPermissoes()" title="Permissões de Acesso"
+        style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);color:rgba(196,168,255,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
+        onmouseover="this.style.background='rgba(139,92,246,.3)'" onmouseout="this.style.background='rgba(139,92,246,.15)'">
+        <span style="font-size:.95rem">🔐</span>Permissões
+      </button>
+      <button id="nav-usuarios" onclick="abrirGerenciarUsuarios()" title="Gerenciar Usuários"
+        style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.28);color:rgba(110,231,183,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
+        onmouseover="this.style.background='rgba(16,185,129,.25)'" onmouseout="this.style.background='rgba(16,185,129,.12)'">
+        <span style="font-size:.95rem">👥</span>Usuários
+      </button>
+      <button id="nav-audit" onclick="abrirLogs()" title="Logs de Auditoria"
+        style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.28);color:rgba(252,165,165,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
+        onmouseover="this.style.background='rgba(239,68,68,.22)'" onmouseout="this.style.background='rgba(239,68,68,.12)'">
+        <span style="font-size:.95rem">📋</span>Logs
+      </button>
+    </div>
+    <!-- Linha inferior — visível para todos -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
+      <button onclick="openAdminPanel()" title="Gerenciar Dados"
+        style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.65);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
+        onmouseover="this.style.background='rgba(255,255,255,.14)'" onmouseout="this.style.background='rgba(255,255,255,.07)'">
+        <span style="font-size:.95rem">⚙️</span>Dados
+      </button>
+      <button id="nav-minha-senha" onclick="abrirAlterarMinhaSenha()" title="Alterar Minha Senha"
+        style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
+        onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">
+        <span style="font-size:.95rem">🔑</span>Senha
+      </button>
+      <button onclick="forceResetCache()" title="Recarregar Dados"
+        style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(255,140,50,.12);border:1px solid rgba(255,140,50,.25);color:rgba(255,180,120,.85);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
+        onmouseover="this.style.background='rgba(255,140,50,.22)'" onmouseout="this.style.background='rgba(255,140,50,.12)'">
+        <span style="font-size:.95rem">🔄</span>Recarregar
+      </button>
+    </div>
   </div>
   <div class="version" style="display:flex;align-items:center;justify-content:space-between">
     <span>Compliance Hub v1.0</span>
@@ -4724,6 +4742,9 @@ function enterApp(user) {
     const el = document.getElementById(id);
     if(el) el.style.display = (user.email === ADMIN_EMAIL) ? 'flex' : 'none';
   });
+  // Mostrar grade admin só se for admin
+  const adminGrid = document.getElementById('nav-admin-grid');
+  if(adminGrid) adminGrid.style.display = (user.email === ADMIN_EMAIL) ? 'grid' : 'none';
 
   // Carregar dados do Supabase após login (token já disponível)
   if(USE_SUPABASE) {
