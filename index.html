@@ -7295,7 +7295,7 @@ const MODULOS = [
 const PERM_PADRAO = {
   'Admin':        MODULOS.map(m=>m.id),
   'Compliance':   MODULOS.map(m=>m.id),
-  'Jurídico':    MODULOS.filter(m=>!['importar'].includes(m.id)).map(m=>m.id),
+  'Auditoria':    MODULOS.filter(m=>!['importar'].includes(m.id)).map(m=>m.id),
   'RH':           ['dashboard','agenda','filiais'],
   'Diretoria':    MODULOS.filter(m=>!['importar','canal-denuncia'].includes(m.id)).map(m=>m.id),
   'Operações':    ['dashboard','agenda','filiais','mapa-risco','planos-acao'],
