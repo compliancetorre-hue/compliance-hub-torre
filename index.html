@@ -4917,7 +4917,7 @@ function getActiveKey() { return ''; }
 function getSbHeaders(extra) { return Object.assign({'Content-Type':'application/json','x-app-token':getAppToken()}, extra||{}); }
 const SB_HEADERS = new Proxy({}, { get(_, prop) { return getSbHeaders()[prop]; } });
 
-const USE_SUPABASE = false; // const OLD = SUPABASE_URL.includes('supabase.co');
+const USE_SUPABASE = true; // const OLD = SUPABASE_URL.includes('supabase.co');
 
 function _efH() {
   return { 'Content-Type': 'application/json', 'x-app-token': getAppToken() };
