@@ -4688,6 +4688,8 @@ async function doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnTe
 
     // Login OK — salvar sessão
     currentUser = user;
+    console.log('[Login] currentUser:', currentUser);
+    console.log('[Login] isAdmin():', isAdmin());
     _saveSession(user);
 
     if(USE_SUPABASE) {
