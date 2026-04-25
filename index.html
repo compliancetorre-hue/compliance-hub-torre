@@ -4609,10 +4609,10 @@ function closeMobile() {
 
 // Senhas armazenadas como SHA-256(email:senha:ch2025) — nunca em texto puro
 let USUARIOS = [
-  { email:'admin@torre.com.br', hash:'42df7d9740c2626a54659bd1add12da11beba77a3e377f94092608b9288e878d', nome:'Administrador', perfil:'Admin', avatar:'AD', cor:'#0f2d4a' },
+  
 ];
-// Email do admin — imutável
-const ADMIN_EMAIL = 'admin@torre.com.br';
+// Nenhum admin padrão — use apenas usuários criados com perfil 'Admin'
+const ADMIN_EMAIL = ''; // Vazio - admin é definido por perfil, não email
 // Derivar hash da senha (SHA-256 via SubtleCrypto)
 async function _hashSenha(email, senha) {
   const msg = email.toLowerCase().trim() + ':' + senha + ':ch2025';
@@ -4688,8 +4688,6 @@ async function doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnTe
 
     // Login OK — salvar sessão
     currentUser = user;
-    console.log('[Login] currentUser:', currentUser);
-    console.log('[Login] isAdmin():', isAdmin());
     _saveSession(user);
 
     if(USE_SUPABASE) {
@@ -4739,7 +4737,7 @@ function enterApp(user) {
   auditLog('login', 'sistema', `Login realizado`, {perfil: user.perfil});
 
   // Mostrar/ocultar botões admin
-  const isUserAdmin = (user.perfil === 'Admin' || user.email === ADMIN_EMAIL);
+  const isUserAdmin = user.perfil === 'Admin';
   const adminBtns = ['nav-permissoes','nav-usuarios','nav-audit'];
   adminBtns.forEach(id => {
     const el = document.getElementById(id);
@@ -4818,7 +4816,7 @@ function doLogout() {
 }
 
 function showForgotPass() {
-  alert('Para recuperar sua senha, entre em contato com o administrador do sistema.\n\nE-mail: admin@torre.com.br');
+  alert('Para recuperar sua senha, entre em contato com o administrador do sistema.');
 }
 
 // Shake keyframe via style tag
@@ -4863,15 +4861,12 @@ function checkSession() {
       // Find user data from USUARIOS list
       const u = USUARIOS.find(x => x.email === s.email);
       if(u) {
-        // Usar o perfil do USUARIOS (fonte da verdade), não da sessão
-        currentUser = { ...u, email: u.email, perfil: u.perfil, nome: u.nome, avatar: u.avatar, cor: u.cor };
-        console.log('[checkSession] currentUser:', currentUser);
+        currentUser = { ...u, perfil: s.perfil, nome: s.nome, avatar: s.avatar, cor: s.cor };
         enterApp(currentUser);
         return true;
       }
       // User from Edge Function response
       currentUser = { email: s.email, perfil: s.perfil, nome: s.nome, avatar: s.avatar, cor: s.cor };
-      console.log('[checkSession] currentUser (from session):', currentUser);
       enterApp(currentUser);
       return true;
     }
@@ -4923,7 +4918,7 @@ function getActiveKey() { return ''; }
 function getSbHeaders(extra) { return Object.assign({'Content-Type':'application/json','x-app-token':getAppToken()}, extra||{}); }
 const SB_HEADERS = new Proxy({}, { get(_, prop) { return getSbHeaders()[prop]; } });
 
-const USE_SUPABASE = true; // const OLD = SUPABASE_URL.includes('supabase.co');
+const USE_SUPABASE = true; // Ativar Supabase
 
 function _efH() {
   return { 'Content-Type': 'application/json', 'x-app-token': getAppToken() };
@@ -7055,7 +7050,7 @@ function renderUsersModal() {
   const builtinEmails = [ADMIN_EMAIL];
   el.innerHTML = USUARIOS.map(u => {
     const isBuiltin = builtinEmails.includes(u.email);
-    const isAdminUser = u.email === 'admin@torre.com.br';
+    const isAdminUser = u.perfil === 'Admin';
     return `<div class="user-mgmt-card">
       <div class="perm-avatar" style="background:${u.cor||'#64748b'}">${u.avatar||'??'}</div>
       <div style="flex:1;min-width:0">
@@ -7288,8 +7283,7 @@ async function permLoadFromSupabase() {
 
 function permGetUser(email) {
   if(!email) return [];
-  if(email === ADMIN_EMAIL) return MODULOS.map(m=>m.id);
-  // Usuários com perfil Admin também têm todas as permissões
+  // Usuários com perfil Admin têm todas as permissões
   const user = USUARIOS.find(u=>u.email===email);
   if(user && user.perfil === 'Admin') return MODULOS.map(m=>m.id);
   // Permissão personalizada tem prioridade
@@ -7301,12 +7295,11 @@ function permGetUser(email) {
 function canAccess(modulo) {
   if(!currentUser) return false;
   if(currentUser.perfil === 'Admin') return true;
-  if(currentUser.email === 'admin@torre.com.br') return true;
   return permGetUser(currentUser.email).includes(modulo);
 }
 
 function isAdmin() {
-  return currentUser && (currentUser.perfil === 'Admin' || currentUser.email === ADMIN_EMAIL);
+  return currentUser && currentUser.perfil === 'Admin';
 }
 
 // ── Atualizar nav com base nas permissões
@@ -7343,7 +7336,7 @@ function _showPermDenied(modulo) {
         Você não tem permissão para acessar o módulo <strong>${modulo}</strong>.<br>
         Solicite acesso ao administrador do sistema.
       </div>
-      <div style="font-size:.8rem;color:#94a3b8;margin-bottom:16px">👤 admin@torre.com.br</div>
+      <div style="font-size:.8rem;color:#94a3b8;margin-bottom:16px">👤 Administrador</div>
       <button onclick="this.closest('div[style]').remove()" 
         style="background:var(--primary);color:#fff;border:none;padding:10px 28px;border-radius:8px;font-weight:700;cursor:pointer">
         Entendi
@@ -8365,7 +8358,7 @@ async function aiAnalisarRiscos() {
     <div style="background:linear-gradient(135deg,#0f2d4a,#1e4976);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
       <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:.85rem">AD</div>
       <div>
-        <div style="color:#fff;font-weight:700">Administrador — admin@torre.com.br</div>
+        <div style="color:#fff;font-weight:700">Administrador do Sistema</div>
         <div style="color:rgba(255,255,255,.7);font-size:.78rem">Acesso total · Crie usuários em 👥 Gerenciar Usuários</div>
       </div>
       <span class="perm-badge admin" style="margin-left:auto">ADMIN</span>
@@ -8431,9 +8424,6 @@ async function aiAnalisarRiscos() {
       <div class="field full">
         <label>Perfil de acesso</label>
         <div class="perfil-selector">
-          <div class="perfil-opt" data-perfil="Admin" onclick="nuSelecionarPerfil('Admin','#0f2d4a')">
-            <div style="font-size:1.3rem;margin-bottom:4px">👑</div>Admin
-          </div>
           <div class="perfil-opt selected" data-perfil="Compliance" onclick="nuSelecionarPerfil('Compliance','#00c49a')">
             <div style="font-size:1.3rem;margin-bottom:4px">🛡️</div>Compliance
           </div>
