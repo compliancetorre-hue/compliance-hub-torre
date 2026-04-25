@@ -4609,8 +4609,7 @@ function closeMobile() {
 
 // Senhas armazenadas como SHA-256(email:senha:ch2025) — nunca em texto puro
 let USUARIOS = [
-  { email:'admin@torre.com.br', hash:'c6471ebc5a40dc6b2e79ec43a7a22e0be4aff80af4b744c0d102d62e08aa3e57', nome:'Administrador', perfil:'Admin', avatar:'AD', cor:'#0f2d4a' },
-  { email:'compliance1@mercadotorre.com.br', hash:'', nome:'Compliance', perfil:'Admin', avatar:'C1', cor:'#0066cc' },
+  { email:'admin@torre.com.br', hash:'42df7d9740c2626a54659bd1add12da11beba77a3e377f94092608b9288e878d', nome:'Administrador', perfil:'Admin', avatar:'AD', cor:'#0f2d4a' },
 ];
 // Email do admin — imutável
 const ADMIN_EMAIL = 'admin@torre.com.br';
@@ -4918,7 +4917,7 @@ function getActiveKey() { return ''; }
 function getSbHeaders(extra) { return Object.assign({'Content-Type':'application/json','x-app-token':getAppToken()}, extra||{}); }
 const SB_HEADERS = new Proxy({}, { get(_, prop) { return getSbHeaders()[prop]; } });
 
-const USE_SUPABASE = SUPABASE_URL.includes('supabase.co');
+const USE_SUPABASE = false; // const OLD = SUPABASE_URL.includes('supabase.co');
 
 function _efH() {
   return { 'Content-Type': 'application/json', 'x-app-token': getAppToken() };
@@ -6221,6 +6220,8 @@ function pjRender(info,cnpjNum,apiName){
 
 // ── ANÁLISE IA — Due Diligence ──────────────
 async function ddAnalisarComIA(razao,cnpj,nivel,score,alertas,atencao,situacao,porte,capital,abertura){
+  const GEMINI_KEY='AIzaSyB6ZjO_Lj9AhpphMZtwUKYeQdzRWLu6Qm8';
+  const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key='+GEMINI_KEY;
   const panel=document.getElementById('dd-ai-result');
   if(!panel) return;
   panel.style.display='block';
@@ -7045,10 +7046,10 @@ function abrirGerenciarUsuarios() {
 function renderUsersModal() {
   const el = document.getElementById('users-list');
   if(!el) return;
-  const builtinEmails = [ADMIN_EMAIL, 'compliance1@mercadotorre.com.br'];
+  const builtinEmails = [ADMIN_EMAIL];
   el.innerHTML = USUARIOS.map(u => {
     const isBuiltin = builtinEmails.includes(u.email);
-    const isAdminUser = ['admin@torre.com.br', 'compliance1@mercadotorre.com.br'].includes(u.email);
+    const isAdminUser = u.email === 'admin@torre.com.br';
     return `<div class="user-mgmt-card">
       <div class="perm-avatar" style="background:${u.cor||'#64748b'}">${u.avatar||'??'}</div>
       <div style="flex:1;min-width:0">
@@ -7296,8 +7297,7 @@ function canAccess(modulo) {
 }
 
 function isAdmin() {
-  const ADMIN_EMAILS = ['admin@torre.com.br', 'compliance1@mercadotorre.com.br'];
-  return currentUser && ADMIN_EMAILS.includes(currentUser.email);
+  return currentUser && currentUser.email === ADMIN_EMAIL;
 }
 
 // ── Atualizar nav com base nas permissões
@@ -8036,6 +8036,8 @@ function rmDeleteUnit(idx) {
 async function aiAnalisarRiscos() {
   const btn=document.getElementById('btn-ai-risco');
   if(btn){btn.disabled=true;btn.textContent='⏳ Analisando...';}
+  const GEMINI_KEY='AIzaSyB6ZjO_Lj9AhpphMZtwUKYeQdzRWLu6Qm8';
+  const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key='+GEMINI_KEY;
   const riscos=(DB.riscos||[]);
   const lista=riscos.map(r=>`[${r.unidade||'?'}] ${r.desc} P:${r.prob} I:${r.impacto} Controle:${r.controle||'Nenhum'}`).join('\n');
   const prompt=`Você é especialista em gestão de riscos da Torre e Cia Supermercados.\nAnalise esta matriz de ${riscos.length} riscos e forneça:\n## Riscos Críticos\n## Lacunas nos Controles\n## 3 Recomendações Prioritárias\n## Score de Risco Geral: X/10\n\nRISCOS:\n${lista}\n\nResponda em português.`;
