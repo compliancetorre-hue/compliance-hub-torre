@@ -7283,15 +7283,18 @@ async function permLoadFromSupabase() {
 function permGetUser(email) {
   if(!email) return [];
   if(email === ADMIN_EMAIL) return MODULOS.map(m=>m.id);
+  // Usuários com perfil Admin também têm todas as permissões
+  const user = USUARIOS.find(u=>u.email===email);
+  if(user && user.perfil === 'Admin') return MODULOS.map(m=>m.id);
   // Permissão personalizada tem prioridade
   if(PERMISSOES[email]) return PERMISSOES[email];
   // Senão usa o padrão do perfil
-  const user = USUARIOS.find(u=>u.email===email);
   return user ? (PERM_PADRAO[user.perfil] || MODULOS.filter(m=>!m.restrito).map(m=>m.id)) : [];
 }
 
 function canAccess(modulo) {
   if(!currentUser) return false;
+  if(currentUser.perfil === 'Admin') return true;
   if(currentUser.email === 'admin@torre.com.br') return true;
   return permGetUser(currentUser.email).includes(modulo);
 }
