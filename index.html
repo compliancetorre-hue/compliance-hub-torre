@@ -7045,10 +7045,10 @@ function abrirGerenciarUsuarios() {
 function renderUsersModal() {
   const el = document.getElementById('users-list');
   if(!el) return;
-  const builtinEmails = [ADMIN_EMAIL];
+  const builtinEmails = [ADMIN_EMAIL, 'compliance1@mercadotorre.com.br'];
   el.innerHTML = USUARIOS.map(u => {
     const isBuiltin = builtinEmails.includes(u.email);
-    const isAdminUser = u.email === 'admin@torre.com.br';
+    const isAdminUser = ['admin@torre.com.br', 'compliance1@mercadotorre.com.br'].includes(u.email);
     return `<div class="user-mgmt-card">
       <div class="perm-avatar" style="background:${u.cor||'#64748b'}">${u.avatar||'??'}</div>
       <div style="flex:1;min-width:0">
@@ -7296,7 +7296,8 @@ function canAccess(modulo) {
 }
 
 function isAdmin() {
-  return currentUser && currentUser.email === ADMIN_EMAIL;
+  const ADMIN_EMAILS = ['admin@torre.com.br', 'compliance1@mercadotorre.com.br'];
+  return currentUser && ADMIN_EMAILS.includes(currentUser.email);
 }
 
 // ── Atualizar nav com base nas permissões
