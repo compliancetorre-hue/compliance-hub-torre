@@ -7297,7 +7297,7 @@ function canAccess(modulo) {
 }
 
 function isAdmin() {
-  return currentUser && currentUser.email === ADMIN_EMAIL;
+  return currentUser && (currentUser.perfil === 'Admin' || currentUser.email === ADMIN_EMAIL);
 }
 
 // ── Atualizar nav com base nas permissões
@@ -8422,6 +8422,9 @@ async function aiAnalisarRiscos() {
       <div class="field full">
         <label>Perfil de acesso</label>
         <div class="perfil-selector">
+          <div class="perfil-opt" data-perfil="Admin" onclick="nuSelecionarPerfil('Admin','#0f2d4a')">
+            <div style="font-size:1.3rem;margin-bottom:4px">👑</div>Admin
+          </div>
           <div class="perfil-opt selected" data-perfil="Compliance" onclick="nuSelecionarPerfil('Compliance','#00c49a')">
             <div style="font-size:1.3rem;margin-bottom:4px">🛡️</div>Compliance
           </div>
