@@ -4739,14 +4739,15 @@ function enterApp(user) {
   auditLog('login', 'sistema', `Login realizado`, {perfil: user.perfil});
 
   // Mostrar/ocultar botões admin
+  const isUserAdmin = (user.perfil === 'Admin' || user.email === ADMIN_EMAIL);
   const adminBtns = ['nav-permissoes','nav-usuarios','nav-audit'];
   adminBtns.forEach(id => {
     const el = document.getElementById(id);
-    if(el) el.style.display = (user.email === ADMIN_EMAIL) ? 'flex' : 'none';
+    if(el) el.style.display = isUserAdmin ? 'flex' : 'none';
   });
   // Mostrar grade admin só se for admin
   const adminGrid = document.getElementById('nav-admin-grid');
-  if(adminGrid) adminGrid.style.display = (user.email === ADMIN_EMAIL) ? 'grid' : 'none';
+  if(adminGrid) adminGrid.style.display = isUserAdmin ? 'grid' : 'none';
 
   // Carregar dados do Supabase após login (token já disponível)
   if(USE_SUPABASE) {
@@ -4862,12 +4863,15 @@ function checkSession() {
       // Find user data from USUARIOS list
       const u = USUARIOS.find(x => x.email === s.email);
       if(u) {
-        currentUser = { ...u, perfil: s.perfil, nome: s.nome, avatar: s.avatar, cor: s.cor };
+        // Usar o perfil do USUARIOS (fonte da verdade), não da sessão
+        currentUser = { ...u, email: u.email, perfil: u.perfil, nome: u.nome, avatar: u.avatar, cor: u.cor };
+        console.log('[checkSession] currentUser:', currentUser);
         enterApp(currentUser);
         return true;
       }
       // User from Edge Function response
       currentUser = { email: s.email, perfil: s.perfil, nome: s.nome, avatar: s.avatar, cor: s.cor };
+      console.log('[checkSession] currentUser (from session):', currentUser);
       enterApp(currentUser);
       return true;
     }
