@@ -4725,33 +4725,58 @@ const PROXY_DB_URL = 'https://qhtkuarlsjlnfkzfmxwa.supabase.co/functions/v1/prox
  */
 async function dbProxy(action, table, data = null, id = null) {
   try {
-    const payload = { action, table };
+    const token = localStorage.getItem('sb_token');
+    const supabaseUrl = 'https://qhtkuarlsjlnfkzfmxwa.supabase.co';
     
-    if (data) payload.data = data;
-    if (id) payload.id = id;
-
     console.info(`📊 [PROXY] ${action.toUpperCase()} ${table}${id ? ` #${id}` : ''}`);
 
-    // Pegar token do localStorage
-    const token = localStorage.getItem('sb_token');
+    let url, method, body;
     const headers = {
       'Content-Type': 'application/json',
+      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFodGt1YXJsc2psbmZremZteHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDkwMTQsImV4cCI6MjA5MTE4NTAxNH0.5rw_iN9_-IYyNlqaOAXdy5wpmrOcvVO-QAUEQBgl3eA'
     };
     
-    // Se tiver token, enviar (para autenticação)
+    // Adicionar token se disponível
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(PROXY_DB_URL, {
-      method: 'POST',
+    switch(action) {
+      case 'read':
+        url = `${supabaseUrl}/rest/v1/${table}?order=id&limit=10000`;
+        method = 'GET';
+        break;
+      
+      case 'create':
+        url = `${supabaseUrl}/rest/v1/${table}`;
+        method = 'POST';
+        body = JSON.stringify(data);
+        break;
+      
+      case 'update':
+        url = `${supabaseUrl}/rest/v1/${table}?id=eq.${id}`;
+        method = 'PATCH';
+        body = JSON.stringify(data);
+        break;
+      
+      case 'delete':
+        url = `${supabaseUrl}/rest/v1/${table}?id=eq.${id}`;
+        method = 'DELETE';
+        break;
+      
+      default:
+        throw new Error(`Action inválida: ${action}`);
+    }
+
+    const response = await fetch(url, {
+      method,
       headers,
-      body: JSON.stringify(payload)
+      ...(body && { body })
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP ${response.status}`);
+      throw new Error(errorData.message || `HTTP ${response.status}`);
     }
 
     const result = await response.json();
