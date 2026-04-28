@@ -1799,6 +1799,21 @@
 </style>
 
 <script>
+// 🔐 LOGIN FUNCTION - DEVE ESTAR AQUI ANTES DO HTML USAR
+function doLogin() {
+  const emailEl = document.getElementById('login-email');
+  const passEl = document.getElementById('login-pass');
+  const errorEl = document.getElementById('login-error');
+  const btnEl = document.getElementById('login-btn');
+  const email = emailEl.value.trim();
+  const senha = passEl.value;
+  if (!email || !senha) {
+    errorEl.textContent = '⚠️ Email e senha são obrigatórios';
+    return;
+  }
+  doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnEl.querySelector('span').textContent);
+}
+
 document.addEventListener('DOMContentLoaded',function(){
   const c=document.getElementById('content');if(!c)return;
   const p=document.createElement('div');
@@ -4916,7 +4931,7 @@ function getActiveKey() { return ''; }
 function getSbHeaders(extra) { return Object.assign({'Content-Type':'application/json','x-app-token':getAppToken()}, extra||{}); }
 const SB_HEADERS = new Proxy({}, { get(_, prop) { return getSbHeaders()[prop]; } });
 
-const USE_SUPABASE = true; // const OLD = SUPABASE_URL.includes('supabase.co');
+
 
 function _efH() {
   return { 'Content-Type': 'application/json', 'x-app-token': getAppToken() };
