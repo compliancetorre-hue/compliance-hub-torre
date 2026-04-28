@@ -796,6 +796,11 @@
         onmouseover="this.style.background='rgba(239,68,68,.22)'" onmouseout="this.style.background='rgba(239,68,68,.12)'">
         <span style="font-size:.95rem">📋</span>Logs
       </button>
+      <button id="nav-branding" onclick="abrirPainelBranding()" title="Branding & Aparência"
+        style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.28);color:rgba(147,197,253,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
+        onmouseover="this.style.background='rgba(59,130,246,.25)'" onmouseout="this.style.background='rgba(59,130,246,.12)'">
+        <span style="font-size:.95rem">🎨</span>Branding
+      </button>
     </div>
     <!-- Linha inferior — visível para todos -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
@@ -4741,7 +4746,7 @@ function enterApp(user) {
   auditLog('login', 'sistema', `Login realizado`, {perfil: user.perfil});
 
   // Mostrar/ocultar botões admin
-  const adminBtns = ['nav-permissoes','nav-usuarios','nav-audit'];
+  const adminBtns = ['nav-permissoes','nav-usuarios','nav-audit','nav-branding'];
   adminBtns.forEach(id => {
     const el = document.getElementById(id);
     if(el) el.style.display = (user.email === ADMIN_EMAIL) ? 'flex' : 'none';
@@ -6854,6 +6859,140 @@ async function logsLoad() {
   } catch(e) { return []; }
 }
 
+// ── BRANDING & APARÊNCIA ──
+let BRANDING = {
+  nome: 'Compliance',
+  subtitulo: 'Sistema de Gestão',
+  corPrimaria: '#0f2d4a',
+  logoUrl: ''
+};
+
+const BRANDING_KEY = 'ch_branding_config';
+
+function carregarBranding() {
+  try {
+    const saved = localStorage.getItem(BRANDING_KEY);
+    if(saved) {
+      const config = JSON.parse(saved);
+      BRANDING = { ...BRANDING, ...config };
+      aplicarBranding();
+    }
+  } catch(e) { console.warn('Erro ao carregar branding:', e); }
+}
+
+function aplicarBranding() {
+  // Mudar nome na sidebar
+  const brandElements = document.querySelectorAll('.brand');
+  brandElements.forEach(el => el.textContent = BRANDING.nome);
+
+  // Mudar cor primária
+  document.documentElement.style.setProperty('--primary', BRANDING.corPrimaria);
+
+  // Mudar logo se configurada
+  if(BRANDING.logoUrl) {
+    const logoElements = document.querySelectorAll('[class*="logo"], [id*="logo"]');
+    logoElements.forEach(el => {
+      if(el.tagName === 'IMG') el.src = BRANDING.logoUrl;
+    });
+  }
+
+  // Mudar title da página
+  document.title = `${BRANDING.nome} · ${BRANDING.subtitulo}`;
+}
+
+function abrirPainelBranding() {
+  if(!isAdmin()) { alert('Apenas o administrador pode alterar o branding.'); return; }
+  openModal('modal-branding');
+  
+  // Preencher form com valores atuais
+  document.getElementById('branding-nome').value = BRANDING.nome;
+  document.getElementById('branding-subtitulo').value = BRANDING.subtitulo;
+  document.getElementById('branding-cor-primaria').value = BRANDING.corPrimaria;
+  document.getElementById('branding-cor-primaria-hex').value = BRANDING.corPrimaria;
+  document.getElementById('branding-logo-url').value = BRANDING.logoUrl;
+
+  // Preview da logo
+  if(BRANDING.logoUrl) {
+    const preview = document.getElementById('branding-logo-preview');
+    const vazio = document.getElementById('branding-logo-vazio');
+    preview.src = BRANDING.logoUrl;
+    preview.style.display = 'block';
+    vazio.style.display = 'none';
+  }
+
+  // Sincronizar cor ao mudar no input color
+  document.getElementById('branding-cor-primaria').addEventListener('change', function() {
+    document.getElementById('branding-cor-primaria-hex').value = this.value;
+  });
+
+  // Sincronizar cor ao mudar no input hex
+  document.getElementById('branding-cor-primaria-hex').addEventListener('change', function() {
+    const hexRegex = /^#[0-9A-F]{6}$/i;
+    if(hexRegex.test(this.value)) {
+      document.getElementById('branding-cor-primaria').value = this.value;
+    }
+  });
+
+  // Preview da logo ao mudar URL
+  document.getElementById('branding-logo-url').addEventListener('change', function() {
+    const preview = document.getElementById('branding-logo-preview');
+    const vazio = document.getElementById('branding-logo-vazio');
+    if(this.value.trim()) {
+      preview.src = this.value;
+      preview.onerror = function() {
+        preview.style.display = 'none';
+        vazio.style.display = 'block';
+        alert('❌ Erro ao carregar a imagem. Verifique a URL.');
+      };
+      preview.onload = function() {
+        preview.style.display = 'block';
+        vazio.style.display = 'none';
+      };
+    } else {
+      preview.style.display = 'none';
+      vazio.style.display = 'block';
+    }
+  });
+}
+
+function salvarBranding() {
+  const nome = document.getElementById('branding-nome').value.trim() || 'Compliance';
+  const subtitulo = document.getElementById('branding-subtitulo').value.trim() || 'Sistema de Gestão';
+  const corPrimaria = document.getElementById('branding-cor-primaria').value || '#0f2d4a';
+  const logoUrl = document.getElementById('branding-logo-url').value.trim() || '';
+
+  BRANDING = { nome, subtitulo, corPrimaria, logoUrl };
+
+  try {
+    localStorage.setItem(BRANDING_KEY, JSON.stringify(BRANDING));
+    aplicarBranding();
+    
+    // Log
+    logAction('update', 'branding', 'Branding alterado', { nome, subtitulo, corPrimaria });
+    
+    alert('✅ Branding salvo com sucesso!\n\nAtualize a página para ver todas as mudanças.');
+    closeModal('modal-branding');
+  } catch(e) {
+    alert('❌ Erro ao salvar: ' + e.message);
+  }
+}
+
+function resetarBranding() {
+  if(confirm('Tem certeza que deseja restaurar as configurações padrão?\n\nNão há volta!')) {
+    BRANDING = {
+      nome: 'Compliance',
+      subtitulo: 'Sistema de Gestão',
+      corPrimaria: '#0f2d4a',
+      logoUrl: ''
+    };
+    localStorage.removeItem(BRANDING_KEY);
+    aplicarBranding();
+    logAction('update', 'branding', 'Branding restaurado para padrão', {});
+    alert('✅ Padrão restaurado!');
+    closeModal('modal-branding');
+  }
+}
+
 // ── ABRIR PAINEL DE LOGS
 async function abrirLogs() {
   if(!isAdmin()) { alert('Apenas o administrador pode ver os logs.'); return; }
@@ -8065,6 +8204,7 @@ async function aiAnalisarRiscos() {
 
 // Inicializar: carregar usuários extras ANTES de verificar sessão/login
 (async function appInit() {
+  carregarBranding(); // Carregar branding customizado
   await usersLoad(); // carrega usuários extras do localStorage/Supabase
   checkSession();
   init();
@@ -8506,6 +8646,71 @@ async function aiAnalisarRiscos() {
 </div>
 
 <!-- MODAL: LOGS DE AUDITORIA -->
+<div class="modal-overlay" id="modal-branding">
+  <div class="modal" style="width:600px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div style="width:42px;height:42px;border-radius:10px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">🎨</div>
+      <div>
+        <h3 style="margin-bottom:2px">Branding & Aparência</h3>
+        <div style="font-size:.78rem;color:var(--text-muted)">Customize o nome, cores e logo da aplicação</div>
+      </div>
+      <button onclick="closeModal('modal-branding')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);margin-left:auto">✕</button>
+    </div>
+
+    <!-- Nome da Aplicação -->
+    <div style="margin-bottom:20px">
+      <label style="display:block;font-weight:600;font-size:.85rem;margin-bottom:6px">Nome da Aplicação</label>
+      <input type="text" id="branding-nome" placeholder="ex: Compliance Hub" 
+        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.9rem">
+      <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Aparecerá no login e na barra lateral</div>
+    </div>
+
+    <!-- Subtítulo -->
+    <div style="margin-bottom:20px">
+      <label style="display:block;font-weight:600;font-size:.85rem;margin-bottom:6px">Subtítulo</label>
+      <input type="text" id="branding-subtitulo" placeholder="ex: Sistema de Gestão"
+        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.9rem">
+      <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Texto exibido abaixo do nome</div>
+    </div>
+
+    <!-- Cor Principal -->
+    <div style="margin-bottom:20px">
+      <label style="display:block;font-weight:600;font-size:.85rem;margin-bottom:6px">Cor Principal</label>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input type="color" id="branding-cor-primaria" 
+          style="width:60px;height:50px;border:2px solid var(--border);border-radius:8px;cursor:pointer">
+        <input type="text" id="branding-cor-primaria-hex" placeholder="#0f2d4a"
+          style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:.85rem">
+      </div>
+      <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Usada em botões, títulos e destaques</div>
+    </div>
+
+    <!-- Logo URL -->
+    <div style="margin-bottom:20px">
+      <label style="display:block;font-weight:600;font-size:.85rem;margin-bottom:6px">URL da Logo</label>
+      <input type="text" id="branding-logo-url" placeholder="https://..."
+        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.9rem">
+      <div style="font-size:.75rem;color:var(--text-muted);margin-top:4px">Link direto para PNG, SVG ou JPG (máx 200x200px recomendado)</div>
+    </div>
+
+    <!-- Preview da Logo -->
+    <div style="margin-bottom:20px;text-align:center">
+      <div style="font-size:.85rem;font-weight:600;margin-bottom:8px">Preview</div>
+      <div style="width:100%;height:100px;border:1px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.02)">
+        <img id="branding-logo-preview" src="" alt="preview" style="max-width:100%;max-height:100%;display:none">
+        <div id="branding-logo-vazio" style="color:var(--text-muted);font-size:.8rem">Logo não configurada</div>
+      </div>
+    </div>
+
+    <!-- Botões -->
+    <div style="display:flex;gap:10px;margin-top:24px">
+      <button onclick="salvarBranding()" class="btn btn-primary" style="flex:1">💾 Salvar Configurações</button>
+      <button onclick="resetarBranding()" class="btn btn-outline">🔄 Restaurar Padrão</button>
+      <button onclick="closeModal('modal-branding')" class="btn btn-outline">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-logs">
   <div class="modal" style="width:820px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
