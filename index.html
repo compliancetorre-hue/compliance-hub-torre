@@ -1826,12 +1826,8 @@ async function doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnTe
   try {
     const inputHash = await _hashSenha(email, senha);
 
-    // Verificar localmente — se não achar, recarregar usuários extras e tentar de novo
+    // Verificar localmente no array USUARIOS
     let user = USUARIOS.find(u => u.email === email && u.hash === inputHash);
-    if(!user) {
-      await usersLoad(); // recarrega extras do localStorage/Supabase
-      user = USUARIOS.find(u => u.email === email && u.hash === inputHash);
-    }
 
     if(!user) {
       btnEl.disabled = false;
@@ -8143,9 +8139,9 @@ async function aiAnalisarRiscos() {
   if(btn){btn.disabled=false;btn.innerHTML='🤖 Avaliar com IA';}
 }
 
-// Inicializar: carregar usuários extras ANTES de verificar sessão/login
+// Inicializar: carregar usuários extras DEPOIS de fazer login
 (async function appInit() {
-  await usersLoad(); // carrega usuários extras do localStorage/Supabase
+  // ❌ REMOVIDO: await usersLoad(); // Causa 401 porque não tem token ainda
   checkSession();
   init();
 })();
