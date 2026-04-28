@@ -1822,62 +1822,6 @@ function doLogin() {
   doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnText);
 }
 
-async function doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnText) {
-  try {
-    errorEl.textContent = '';
-    btnEl.disabled = true;
-    btnEl.querySelector('span').textContent = '⏳ Autenticando...';
-
-    // Usar Supabase Client JS com RLS desativado (seguro porque usa ANON_KEY com permissões limitadas)
-    // Nota: As credenciais agora são protegidas pela RLS das tabelas
-    const supabaseUrl = 'https://qhtkuarlsjlnfkzfmxwa.supabase.co';
-    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFodGt1YXJsc2psbmZremZteHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDkwMTQsImV4cCI6MjA5MTE4NTAxNH0.5rw_iN9_-IYyNlqaOAXdy5wpmrOcvVO-QAUEQBgl3eA';
-
-    const { data, error } = await fetch(supabaseUrl + '/auth/v1/token?grant_type=password', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'apikey': supabaseAnonKey
-      },
-      body: JSON.stringify({
-        email,
-        password: senha,
-        gotrue_meta_security: {}
-      })
-    }).then(r => {
-      console.log('Login response status:', r.status);
-      return r.json().then(d => {
-        console.log('Login response data:', JSON.stringify(d, null, 2));
-        return { data: d, error: d.error_description ? new Error(d.error_description) : null };
-      });
-    });
-
-    if (error || !data?.access_token) {
-      const errorMsg = error?.message || data?.error_description || data?.error || 'Falha na autenticação';
-      console.error('Login failed:', errorMsg, 'Data:', data);
-      throw new Error(errorMsg);
-    }
-
-    // Salvar token
-    localStorage.setItem('sb_token', data.access_token);
-    localStorage.setItem('sb_user', JSON.stringify(data.user));
-    
-    window.currentUser = data.user;
-
-    // Redirecionar
-    document.getElementById('login-screen').classList.add('hidden');
-    location.hash = '#dashboard';
-    location.reload();
-
-  } catch (error) {
-    console.error('Login error:', error);
-    errorEl.textContent = `❌ ${error.message}`;
-  } finally {
-    btnEl.disabled = false;
-    btnEl.querySelector('span').textContent = btnText;
-  }
-}
-
 // ==========================================
 document.addEventListener('DOMContentLoaded',async function(){
   // Se o usuário está logado, carregar usuários do Supabase
