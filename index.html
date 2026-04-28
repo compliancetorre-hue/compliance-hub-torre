@@ -683,7 +683,7 @@
         </svg>
       </div>
       <div class="login-logo-text">
-        <div class="brand">Compliance Hub</div>
+        <div class="brand">Compliance</div>
         <div class="sub">Torre e Cia Supermercados</div>
       </div>
     </div>
@@ -1799,20 +1799,9 @@
 </style>
 
 <script>
-// 🔐 LOGIN FUNCTION - DEVE ESTAR AQUI ANTES DO HTML USAR
-function doLogin() {
-  const emailEl = document.getElementById('login-email');
-  const passEl = document.getElementById('login-pass');
-  const errorEl = document.getElementById('login-error');
-  const btnEl = document.getElementById('login-btn');
-  const email = emailEl.value.trim();
-  const senha = passEl.value;
-  if (!email || !senha) {
-    errorEl.textContent = '⚠️ Email e senha são obrigatórios';
-    return;
-  }
-  doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnEl.querySelector('span').textContent);
-}
+// ===== CONSTANTES GLOBAIS =====
+const SUPABASE_URL  = 'https://qhtkuarlsjlnfkzfmxwa.supabase.co';
+const EDGE_URL = SUPABASE_URL + '/functions/v1/api';
 
 document.addEventListener('DOMContentLoaded',function(){
   const c=document.getElementById('content');if(!c)return;
@@ -4624,7 +4613,7 @@ function closeMobile() {
 
 // Senhas armazenadas como SHA-256(email:senha:ch2025) — nunca em texto puro
 let USUARIOS = [
-  { email:'admin@torre.com.br', hash:'32b1257273dc71a74bdd6462a8c4ab72a569a1d932c4e79d9a801605e3c2c270', nome:'Admin Torre', perfil:'Admin', avatar:'AT', cor:'#0f2d4a' },
+  { email:'admin@torre.com.br', hash:'32b1257273dc71a74bdd6462a8c4ab72a569a1d932c4e79d9a801605e3c2c270', nome:'Administrador', perfil:'Admin', avatar:'AD', cor:'#0f2d4a' },
 ];
 // Email do admin — imutável
 const ADMIN_EMAIL = 'admin@torre.com.br';
@@ -4908,7 +4897,7 @@ function checkSession() {
 // Pegue em: https://app.supabase.com → Settings → API
 
 // ✅ URL do projeto (correta)
-const SUPABASE_URL  = 'https://qhtkuarlsjlnfkzfmxwa.supabase.co';
+// const SUPABASE_URL  = 'https://qhtkuarlsjlnfkzfmxwa.supabase.co';  // ← JÁ DEFINIDA NO INÍCIO
 
 // ⚠️  COLE AQUI sua anon key (começa com eyJ...)
 // Pegue em: supabase.com → seu projeto → Settings → API → "anon public"
@@ -4921,7 +4910,8 @@ const SUPABASE_ANON = _a1+_a2+_a3;
 
 // Ativo quando a anon key parece uma JWT válida (começa com eyJ)
 // Também verifica se há uma chave salva no localStorage
-const USE_SUPABASE = true; // Forçado para true
+// ── EDGE FUNCTION — único ponto de acesso ao banco (service_role fica no servidor)
+// const EDGE_URL = SUPABASE_URL + '/functions/v1/api';  // ← JÁ DEFINIDA NO INÍCIO
 
 function getAppToken() { return sessionStorage.getItem('ch_app_token') || ''; }
 function setAppToken(t) { sessionStorage.setItem('ch_app_token', t); }
@@ -4931,7 +4921,7 @@ function getActiveKey() { return ''; }
 function getSbHeaders(extra) { return Object.assign({'Content-Type':'application/json','x-app-token':getAppToken()}, extra||{}); }
 const SB_HEADERS = new Proxy({}, { get(_, prop) { return getSbHeaders()[prop]; } });
 
-
+const USE_SUPABASE = SUPABASE_URL.includes('supabase.co');
 
 function _efH() {
   return { 'Content-Type': 'application/json', 'x-app-token': getAppToken() };
