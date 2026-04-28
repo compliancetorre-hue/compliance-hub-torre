@@ -5033,7 +5033,7 @@ const SUPABASE_URL = 'https://qhtkuarlsjlnfkzfmxwa.supabase.co'; // URL do Supab
 // REMOVIDO
 // REMOVIDO
 // REMOVIDO
-const SUPABASE_ANON = ''; // REMOVIDO - usar proxy-db
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFodGt1YXJsc2psbmZremZteHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDkwMTQsImV4cCI6MjA5MTE4NTAxNH0.5rw_iN9_-IYyNlqaOAXdy5wpmrOcvVO-QAUEQBgl3eA'; // REMOVIDO - usar proxy-db
 
 // Ativo quando a anon key parece uma JWT válida (começa com eyJ)
 // Também verifica se há uma chave salva no localStorage
@@ -7110,7 +7110,7 @@ async function usersLoad() {
     try {
       const r = await fetch(
         `${SUPABASE_URL}/rest/v1/settings?key=eq.usuarios_extras&select=value`,
-        { headers: {  'Authorization': 'Bearer ' + SUPABASE_ANON } }
+        { headers: {  'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFodGt1YXJsc2psbmZremZteHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDkwMTQsImV4cCI6MjA5MTE4NTAxNH0.5rw_iN9_-IYyNlqaOAXdy5wpmrOcvVO-QAUEQBgl3eA' } }
       );
       if(r.ok) {
         const rows = await r.json();
@@ -7372,7 +7372,7 @@ async function permLoadFromSupabase() {
   try {
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/settings?key=eq.permissoes&select=value`,
-      { headers: {  'Authorization': 'Bearer ' + SUPABASE_ANON } }
+      { headers: {  'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFodGt1YXJsc2psbmZremZteHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDkwMTQsImV4cCI6MjA5MTE4NTAxNH0.5rw_iN9_-IYyNlqaOAXdy5wpmrOcvVO-QAUEQBgl3eA' } }
     );
     if(r.ok) {
       const rows = await r.json();
