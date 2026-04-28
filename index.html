@@ -1822,6 +1822,68 @@ function doLogin() {
   doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnText);
 }
 
+async function doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnText) {
+  try {
+    const inputHash = await _hashSenha(email, senha);
+
+    // Verificar localmente — se não achar, recarregar usuários extras e tentar de novo
+    let user = USUARIOS.find(u => u.email === email && u.hash === inputHash);
+    if(!user) {
+      await usersLoad(); // recarrega extras do localStorage/Supabase
+      user = USUARIOS.find(u => u.email === email && u.hash === inputHash);
+    }
+
+    if(!user) {
+      btnEl.disabled = false;
+      btnText.textContent = 'Entrar no Sistema';
+      emailEl.classList.add('error');
+      passEl.classList.add('error');
+      errorEl.innerHTML = '❌ E-mail ou senha incorretos.';
+      passEl.value = '';
+      passEl.focus();
+      const box = document.querySelector('.login-box');
+      if(box) { box.style.animation='none'; box.offsetHeight; box.style.animation='shake .4s ease'; }
+      return;
+    }
+
+    // Login OK — salvar sessão
+    currentUser = user;
+    _saveSession(user);
+
+    if(USE_SUPABASE) {
+      // Aguardar token do Edge Function ANTES de entrar no app
+      try {
+        showLoadingBar(true, 'Conectando ao servidor...');
+        const r = await fetch('https://qhtkuarlsjlnfkzfmxwa.supabase.co/functions/v1/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, hash: inputHash })
+        });
+        showLoadingBar(false);
+        console.log('[Login] Edge Function status:', r.status);
+        if(r.ok) {
+          const resp = await r.json();
+          console.log('[Login] Token recebido:', resp.token ? 'SIM' : 'NÃO');
+          if(resp && resp.token) setAppToken(resp.token);
+        } else {
+          const errText = await r.text();
+          console.warn('[Login] Edge Function erro:', r.status, errText);
+        }
+      } catch(e) {
+        showLoadingBar(false);
+        console.warn('[Login] Edge Function indisponível:', e.message);
+      }
+    }
+
+    enterApp(user);
+  } catch(e) {
+    btnEl.disabled = false;
+    btnText.textContent = 'Entrar no Sistema';
+    errorEl.innerHTML = '❌ Erro ao autenticar. Tente novamente.';
+    console.error('Login error:', e);
+  }
+}
+
 // ==========================================
 document.addEventListener('DOMContentLoaded',async function(){
   // Se o usuário está logado, carregar usuários do Supabase
