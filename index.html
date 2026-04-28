@@ -4906,8 +4906,7 @@ const SUPABASE_ANON = _a1+_a2+_a3;
 
 // Ativo quando a anon key parece uma JWT válida (começa com eyJ)
 // Também verifica se há uma chave salva no localStorage
-// ── EDGE FUNCTION — único ponto de acesso ao banco (service_role fica no servidor)
-const EDGE_URL = SUPABASE_URL + '/functions/v1/api';
+const USE_SUPABASE = true; // Forçado para true
 
 function getAppToken() { return sessionStorage.getItem('ch_app_token') || ''; }
 function setAppToken(t) { sessionStorage.setItem('ch_app_token', t); }
@@ -4917,7 +4916,7 @@ function getActiveKey() { return ''; }
 function getSbHeaders(extra) { return Object.assign({'Content-Type':'application/json','x-app-token':getAppToken()}, extra||{}); }
 const SB_HEADERS = new Proxy({}, { get(_, prop) { return getSbHeaders()[prop]; } });
 
-const USE_SUPABASE = false; // const OLD = SUPABASE_URL.includes('supabase.co');
+const USE_SUPABASE = true; // const OLD = SUPABASE_URL.includes('supabase.co');
 
 function _efH() {
   return { 'Content-Type': 'application/json', 'x-app-token': getAppToken() };
