@@ -1871,7 +1871,17 @@ async function doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnTe
 }
 
 // ==========================================
-document.addEventListener('DOMContentLoaded',function(){
+document.addEventListener('DOMContentLoaded',async function(){
+  // Se o usuário está logado, carregar usuários do Supabase
+  const token = localStorage.getItem('sb_token');
+  if(token) {
+    try {
+      await usersLoad(); // Agora o token está disponível
+    } catch(e) {
+      console.warn('Erro ao carregar usuários:', e.message);
+    }
+  }
+  
   const c=document.getElementById('content');if(!c)return;
   const p=document.createElement('div');
   p.className='page';p.id='page-due-diligence';
@@ -4857,9 +4867,9 @@ async function doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnTe
 function enterApp(user) {
   // Carregar usuários extras e permissões sequencialmente
   (async () => {
-    await usersLoad();         // carrega usuários do servidor
+    // await usersLoad();         // ❌ DESATIVADO - tenta acessar antes do token estar pronto
     permLoad();                // carrega permissões do localStorage
-    await permLoadFromSupabase(); // atualiza com versão do Supabase
+    await permLoadFromSupabase(); // atualiza com versão do Supabase (com token pronto)
     permAtualizarNav();        // atualiza nav com permissões corretas
   })();
 
@@ -7105,12 +7115,18 @@ async function usersLoad() {
   // Limpar array completamente — nenhum admin padrão
   USUARIOS = [];
 
-  // Buscar via REST direto (anon key) — independente do Edge Function
+  // Buscar via REST com o token do usuário logado (respeita RLS)
   if(USE_SUPABASE) {
     try {
+      const token = localStorage.getItem('sb_token');
+      if(!token) {
+        console.warn('[usersLoad] Nenhum token disponível');
+        return; // Sair se não tiver token
+      }
+      
       const r = await fetch(
         `${SUPABASE_URL}/rest/v1/settings?key=eq.usuarios_extras&select=value`,
-        { headers: {  'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFodGt1YXJsc2psbmZremZteHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDkwMTQsImV4cCI6MjA5MTE4NTAxNH0.5rw_iN9_-IYyNlqaOAXdy5wpmrOcvVO-QAUEQBgl3eA' } }
+        { headers: {  'Authorization': 'Bearer ' + token } } // Usar token do usuário
       );
       if(r.ok) {
         const rows = await r.json();
@@ -7124,6 +7140,8 @@ async function usersLoad() {
             return;
           }
         }
+      } else {
+        console.warn('[usersLoad] REST error:', r.status, r.statusText);
       }
     } catch(e) { console.warn('[usersLoad] REST erro:', e.message); }
   }
@@ -7370,9 +7388,12 @@ async function permSave() {
 async function permLoadFromSupabase() {
   if(!USE_SUPABASE) return;
   try {
+    const token = localStorage.getItem('sb_token');
+    if(!token) return; // Sair se não tiver token
+    
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/settings?key=eq.permissoes&select=value`,
-      { headers: {  'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFodGt1YXJsc2psbmZremZteHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDkwMTQsImV4cCI6MjA5MTE4NTAxNH0.5rw_iN9_-IYyNlqaOAXdy5wpmrOcvVO-QAUEQBgl3eA' } }
+      { headers: {  'Authorization': 'Bearer ' + token } } // Usar token do usuário
     );
     if(r.ok) {
       const rows = await r.json();
@@ -7382,6 +7403,8 @@ async function permLoadFromSupabase() {
         localStorage.setItem(PERM_KEY, JSON.stringify(PERMISSOES));
         console.log('[permLoad] OK');
       }
+    } else {
+      console.warn('[permLoad] status:', r.status);
     }
   } catch(e) { console.warn('[permLoad] erro:', e.message); }
 }
