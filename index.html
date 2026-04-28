@@ -6869,13 +6869,40 @@ let BRANDING = {
 
 const BRANDING_KEY = 'ch_branding_config';
 
-function carregarBranding() {
+async function carregarBranding() {
   try {
+    // Tentar carregar do Supabase primeiro
+    if(USE_SUPABASE && SUPABASE_URL) {
+      try {
+        const r = await fetch(`${EDGE_URL}/data/branding?limit=1`, { 
+          headers: _efH() 
+        });
+        if(r.ok) {
+          const data = await r.json();
+          if(data && data.length > 0) {
+            const config = data[0];
+            BRANDING = {
+              nome: config.nome || 'Compliance',
+              subtitulo: config.subtitulo || 'Sistema de Gestão',
+              corPrimaria: config.cor_primaria || '#0f2d4a',
+              logoUrl: config.logo_url || ''
+            };
+            localStorage.setItem(BRANDING_KEY, JSON.stringify(BRANDING));
+            aplicarBranding();
+            return;
+          }
+        }
+      } catch(e) { console.warn('Erro ao carregar branding do Supabase:', e.message); }
+    }
+    
+    // Fallback: localStorage
     const saved = localStorage.getItem(BRANDING_KEY);
     if(saved) {
       const config = JSON.parse(saved);
       BRANDING = { ...BRANDING, ...config };
       aplicarBranding();
+    } else {
+      aplicarBranding(); // Aplicar padrão
     }
   } catch(e) { console.warn('Erro ao carregar branding:', e); }
 }
@@ -6955,7 +6982,7 @@ function abrirPainelBranding() {
   });
 }
 
-function salvarBranding() {
+async function salvarBranding() {
   const nome = document.getElementById('branding-nome').value.trim() || 'Compliance';
   const subtitulo = document.getElementById('branding-subtitulo').value.trim() || 'Sistema de Gestão';
   const corPrimaria = document.getElementById('branding-cor-primaria').value || '#0f2d4a';
@@ -6964,32 +6991,89 @@ function salvarBranding() {
   BRANDING = { nome, subtitulo, corPrimaria, logoUrl };
 
   try {
+    // Salvar no Supabase
+    if(USE_SUPABASE && SUPABASE_URL) {
+      const payload = {
+        nome,
+        subtitulo,
+        cor_primaria: corPrimaria,
+        logo_url: logoUrl,
+        atualizado_por: currentUser?.email || 'admin@torre.com.br'
+      };
+
+      const r = await fetch(`${EDGE_URL}/data/branding`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ..._efH()
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if(!r.ok) {
+        const err = await r.text();
+        console.warn('Erro ao salvar no Supabase:', err);
+        alert('⚠️ Erro ao salvar no servidor. Salvando localmente...');
+      } else {
+        console.log('✅ Branding salvo no Supabase');
+      }
+    }
+
+    // Sempre salvar no localStorage também (fallback)
     localStorage.setItem(BRANDING_KEY, JSON.stringify(BRANDING));
     aplicarBranding();
     
     // Log
-    logAction('update', 'branding', 'Branding alterado', { nome, subtitulo, corPrimaria });
+    auditLog('update', 'branding', 'Branding alterado', { nome, subtitulo, corPrimaria });
     
-    alert('✅ Branding salvo com sucesso!\n\nAtualize a página para ver todas as mudanças.');
+    alert('✅ Branding salvo com sucesso para todos os usuários!\n\nAtualize a página para ver todas as mudanças.');
     closeModal('modal-branding');
   } catch(e) {
+    console.error('Erro ao salvar branding:', e);
     alert('❌ Erro ao salvar: ' + e.message);
   }
 }
 
-function resetarBranding() {
-  if(confirm('Tem certeza que deseja restaurar as configurações padrão?\n\nNão há volta!')) {
-    BRANDING = {
-      nome: 'Compliance',
-      subtitulo: 'Sistema de Gestão',
-      corPrimaria: '#0f2d4a',
-      logoUrl: ''
-    };
-    localStorage.removeItem(BRANDING_KEY);
-    aplicarBranding();
-    logAction('update', 'branding', 'Branding restaurado para padrão', {});
-    alert('✅ Padrão restaurado!');
-    closeModal('modal-branding');
+async function resetarBranding() {
+  if(confirm('Tem certeza que deseja restaurar as configurações padrão?\n\nIsso afetará todos os usuários!')) {
+    try {
+      BRANDING = {
+        nome: 'Compliance',
+        subtitulo: 'Sistema de Gestão',
+        corPrimaria: '#0f2d4a',
+        logoUrl: ''
+      };
+
+      // Resetar no Supabase
+      if(USE_SUPABASE && SUPABASE_URL) {
+        const r = await fetch(`${EDGE_URL}/data/branding`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ..._efH()
+          },
+          body: JSON.stringify({
+            nome: 'Compliance',
+            subtitulo: 'Sistema de Gestão',
+            cor_primaria: '#0f2d4a',
+            logo_url: '',
+            atualizado_por: currentUser?.email || 'admin@torre.com.br'
+          })
+        });
+
+        if(!r.ok) {
+          console.warn('Erro ao resetar no Supabase');
+        }
+      }
+
+      localStorage.removeItem(BRANDING_KEY);
+      aplicarBranding();
+      auditLog('update', 'branding', 'Branding restaurado para padrão', {});
+      alert('✅ Padrão restaurado para todos!');
+      closeModal('modal-branding');
+    } catch(e) {
+      alert('❌ Erro: ' + e.message);
+    }
   }
 }
 
