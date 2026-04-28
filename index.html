@@ -1844,10 +1844,18 @@ async function doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnTe
         password: senha,
         gotrue_meta_security: {}
       })
-    }).then(r => r.json()).then(d => ({ data: d, error: d.error_description ? new Error(d.error_description) : null }));
+    }).then(r => {
+      console.log('Login response status:', r.status);
+      return r.json().then(d => {
+        console.log('Login response data:', JSON.stringify(d, null, 2));
+        return { data: d, error: d.error_description ? new Error(d.error_description) : null };
+      });
+    });
 
     if (error || !data?.access_token) {
-      throw new Error(error?.message || data?.error_description || 'Falha na autenticação');
+      const errorMsg = error?.message || data?.error_description || data?.error || 'Falha na autenticação';
+      console.error('Login failed:', errorMsg, 'Data:', data);
+      throw new Error(errorMsg);
     }
 
     // Salvar token
