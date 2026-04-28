@@ -6991,7 +6991,11 @@ async function salvarBranding() {
   BRANDING = { nome, subtitulo, corPrimaria, logoUrl };
 
   try {
-    // Salvar no Supabase
+    // Salvar no localStorage primeiro (sempre funciona)
+    localStorage.setItem(BRANDING_KEY, JSON.stringify(BRANDING));
+    aplicarBranding();
+
+    // Tentar salvar no Supabase também
     if(USE_SUPABASE && SUPABASE_URL) {
       const payload = {
         nome,
@@ -7001,32 +7005,35 @@ async function salvarBranding() {
         atualizado_por: currentUser?.email || 'admin@torre.com.br'
       };
 
-      const r = await fetch(`${EDGE_URL}/data/branding`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ..._efH()
-        },
-        body: JSON.stringify(payload)
-      });
+      try {
+        // Primeiro, tentar atualizar via REST (mais simples que Edge Function)
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/branding?id=eq.1`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON,
+            'Authorization': 'Bearer ' + SUPABASE_ANON
+          },
+          body: JSON.stringify(payload)
+        });
 
-      if(!r.ok) {
-        const err = await r.text();
-        console.warn('Erro ao salvar no Supabase:', err);
-        alert('⚠️ Erro ao salvar no servidor. Salvando localmente...');
-      } else {
-        console.log('✅ Branding salvo no Supabase');
+        if(r.ok) {
+          console.log('✅ Branding salvo no Supabase');
+          auditLog('update', 'branding', 'Branding alterado', { nome, subtitulo, corPrimaria });
+          alert('✅ Branding salvo com sucesso para todos os usuários!');
+        } else {
+          console.warn('Falha Supabase:', r.status, await r.text());
+          alert('⚠️ Branding salvo localmente. Servidor pode estar indisponível.');
+        }
+      } catch(e) {
+        console.warn('Erro ao enviar para Supabase:', e.message);
+        alert('⚠️ Branding salvo localmente. Servidor pode estar indisponível.');
       }
+    } else {
+      auditLog('update', 'branding', 'Branding alterado (local)', { nome, subtitulo, corPrimaria });
+      alert('✅ Branding salvo com sucesso!');
     }
-
-    // Sempre salvar no localStorage também (fallback)
-    localStorage.setItem(BRANDING_KEY, JSON.stringify(BRANDING));
-    aplicarBranding();
     
-    // Log
-    auditLog('update', 'branding', 'Branding alterado', { nome, subtitulo, corPrimaria });
-    
-    alert('✅ Branding salvo com sucesso para todos os usuários!\n\nAtualize a página para ver todas as mudanças.');
     closeModal('modal-branding');
   } catch(e) {
     console.error('Erro ao salvar branding:', e);
@@ -7044,32 +7051,39 @@ async function resetarBranding() {
         logoUrl: ''
       };
 
+      // Salvar localmente
+      localStorage.removeItem(BRANDING_KEY);
+
       // Resetar no Supabase
       if(USE_SUPABASE && SUPABASE_URL) {
-        const r = await fetch(`${EDGE_URL}/data/branding`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            ..._efH()
-          },
-          body: JSON.stringify({
-            nome: 'Compliance',
-            subtitulo: 'Sistema de Gestão',
-            cor_primaria: '#0f2d4a',
-            logo_url: '',
-            atualizado_por: currentUser?.email || 'admin@torre.com.br'
-          })
-        });
+        try {
+          const r = await fetch(`${SUPABASE_URL}/rest/v1/branding?id=eq.1`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SUPABASE_ANON,
+              'Authorization': 'Bearer ' + SUPABASE_ANON
+            },
+            body: JSON.stringify({
+              nome: 'Compliance',
+              subtitulo: 'Sistema de Gestão',
+              cor_primaria: '#0f2d4a',
+              logo_url: '',
+              atualizado_por: currentUser?.email || 'admin@torre.com.br'
+            })
+          });
 
-        if(!r.ok) {
-          console.warn('Erro ao resetar no Supabase');
+          if(!r.ok) {
+            console.warn('Erro ao resetar no Supabase');
+          }
+        } catch(e) {
+          console.warn('Erro ao resetar:', e);
         }
       }
 
-      localStorage.removeItem(BRANDING_KEY);
       aplicarBranding();
       auditLog('update', 'branding', 'Branding restaurado para padrão', {});
-      alert('✅ Padrão restaurado para todos!');
+      alert('✅ Padrão restaurado!');
       closeModal('modal-branding');
     } catch(e) {
       alert('❌ Erro: ' + e.message);
