@@ -8,18 +8,18 @@
   
   <link rel="stylesheet" href="css/styles.css">
   <script>
-  /* DIAGNOSTIC â remove after fix */
+  /* DIAGNOSTIC — remove after fix */
   window.__loadErrors=[];
   window.addEventListener('error',function(e){
-    var msg=(e.message||'Erro')+'  â  '+(e.filename||'').split('/').pop()+':'+e.lineno;
+    var msg=(e.message||'Erro')+'  →  '+(e.filename||'').split('/').pop()+':'+e.lineno;
     window.__loadErrors.push(msg);
     var box=document.getElementById('_errbox');
     if(!box&&document.body){box=document.createElement('div');box.id='_errbox';box.style.cssText='position:fixed;top:0;left:0;right:0;background:#7f1d1d;color:#fef2f2;padding:10px 14px;font:12px/1.6 monospace;z-index:999999;white-space:pre-wrap;max-height:240px;overflow:auto;';document.body.insertBefore(box,document.body.firstChild);}
-    if(box)box.innerHTML='<b>ð´ Erros JS (reporte ao suporte):</b>\n'+window.__loadErrors.join('\n');
+    if(box)box.innerHTML='<b>🔴 Erros JS (reporte ao suporte):</b>\n'+window.__loadErrors.join('\n');
   },true);
   window.addEventListener('unhandledrejection',function(e){
     window.__loadErrors.push('Promise rejeitada: '+(e.reason&&e.reason.message||String(e.reason)));
-    var box=document.getElementById('_errbox');if(box)box.innerHTML='<b>ð´ Erros JS:</b>\n'+window.__loadErrors.join('\n');
+    var box=document.getElementById('_errbox');if(box)box.innerHTML='<b>🔴 Erros JS:</b>\n'+window.__loadErrors.join('\n');
   });
   </script>
 
@@ -74,9 +74,9 @@
 </head>
 <body>
 
-<!-- ââââââââââââââââââââââââââââââââ
+<!-- ════════════════════════════════
      TELA DE LOGIN
-ââââââââââââââââââââââââââââââââ -->
+════════════════════════════════ -->
 <div id="login-screen">
   <div class="login-bg">
     <div class="login-bg-circle"></div>
@@ -122,7 +122,7 @@
         <label>Senha</label>
         <div class="login-input-wrap">
           <span class="login-input-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke="#94a3b8" stroke-width="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#94a3b8" stroke-width="2"/></svg></span>
-          <input type="password" id="login-pass" placeholder="â¢â¢â¢â¢â¢â¢â¢â¢" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
+          <input type="password" id="login-pass" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"/>
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:-4px;margin-bottom:20px">
@@ -134,7 +134,7 @@
       <div class="login-error" id="login-error"></div>
       <div class="login-badge">
         <div class="login-badge-dot"></div>
-        <span>Sistema protegido · Compliance Hub v1.0</span>
+        <span>Sistema protegido &middot; Compliance Hub v1.0</span>
       </div>
     </div>
   </div>
@@ -160,45 +160,45 @@
   <nav>
     <div class="nav-label">Visão Geral</div>
     <a onclick="goto('dashboard',this)" class="active" data-page="dashboard">
-      <span class="icon">ð</span> Dashboard
+      <span class="icon">📊</span> Dashboard
     </a>
     <a onclick="goto('agenda',this)" data-page="agenda">
-      <span class="icon">ð</span> Agenda
+      <span class="icon">📅</span> Agenda
     </a>
 
     <div class="nav-label">Estrutura</div>
     <a onclick="goto('filiais',this)" data-page="filiais">
-      <span class="icon">ð¢</span> Filiais e Setores
+      <span class="icon">🏢</span> Filiais e Setores
     </a>
 
     <div class="nav-label">Compliance</div>
     <a onclick="goto('mapa-risco',this)" data-page="mapa-risco">
-      <span class="icon">ðºï¸</span> Mapeamento de Risco
+      <span class="icon">🗺️</span> Mapeamento de Risco
     </a>
 
     <div class="nav-label">Denúncias</div>
     <a onclick="goto('canal-denuncia',this)" data-page="canal-denuncia">
-      <span class="icon">ð¢</span> Canal de Denúncia
+      <span class="icon">📢</span> Canal de Denúncia
     </a>
 
     <div class="nav-label">Análise</div>
     <a onclick="goto('relatorios',this)" data-page="relatorios">
-      <span class="icon">ð</span> Relatórios
+      <span class="icon">📑</span> Relatórios
     </a>
     <a onclick="goto('importar',this)" data-page="importar">
-      <span class="icon">â¬ï¸</span> Importar Planilha
+      <span class="icon">⬆️</span> Importar Planilha
     </a>
 
     <div class="nav-label">Fluxo Visual</div>
     <a onclick="goto('flowboard',this)" data-page="flowboard">
-      <span class="icon">ðï¸</span> Flow Board
+      <span class="icon">🗂️</span> Flow Board
     </a>
     <div class="nav-label">Pesquisa</div>
     <a onclick="goto('due-diligence',this)" data-page="due-diligence">
-      <span class="icon">ð</span> Due Diligence
+      <span class="icon">🔍</span> Due Diligence
     </a>
         <a onclick="goto('due-diligence2',this)" data-page="due-diligence2">
-                <span class="icon">ð</span> Due Diligence 2
+                <span class="icon">🔎</span> Due Diligence 2
         </a>
   </nav>
   <div style="padding:8px 12px 4px;border-top:1px solid rgba(255,255,255,.08);margin-top:4px">
@@ -207,46 +207,46 @@
       <button id="nav-permissoes" onclick="abrirGerenciarPermissoes()" title="Permissões de Acesso"
         style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);color:rgba(196,168,255,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(139,92,246,.3)'" onmouseout="this.style.background='rgba(139,92,246,.15)'">
-        <span style="font-size:.95rem">ð</span>Permissões
+        <span style="font-size:.95rem">🔐</span>Permissões
       </button>
       <button id="nav-usuarios" onclick="abrirGerenciarUsuarios()" title="Gerenciar Usuários"
         style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.28);color:rgba(110,231,183,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(16,185,129,.25)'" onmouseout="this.style.background='rgba(16,185,129,.12)'">
-        <span style="font-size:.95rem">ð¥</span>Usuários
+        <span style="font-size:.95rem">👥</span>Usuários
       </button>
       <button id="nav-audit" onclick="abrirLogs()" title="Logs de Auditoria"
         style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.28);color:rgba(252,165,165,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(239,68,68,.22)'" onmouseout="this.style.background='rgba(239,68,68,.12)'">
-        <span style="font-size:.95rem">ð</span>Logs
+        <span style="font-size:.95rem">📋</span>Logs
       </button>
       <button id="nav-branding" onclick="abrirPainelBranding()" title="Branding & Aparência"
         style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.28);color:rgba(147,197,253,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(59,130,246,.25)'" onmouseout="this.style.background='rgba(59,130,246,.12)'">
-        <span style="font-size:.95rem">ð¨</span>Branding
+        <span style="font-size:.95rem">🎨</span>Branding
       </button>
     </div>
-    <!-- Linha inferior â visível para todos -->
+    <!-- Linha inferior — visível para todos -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
       <button onclick="openAdminPanel()" title="Gerenciar Dados"
         style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.65);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(255,255,255,.14)'" onmouseout="this.style.background='rgba(255,255,255,.07)'">
-        <span style="font-size:.95rem">âï¸</span>Dados
+        <span style="font-size:.95rem">⚙️</span>Dados
       </button>
       <button id="nav-minha-senha" onclick="abrirAlterarMinhaSenha()" title="Alterar Minha Senha"
         style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">
-        <span style="font-size:.95rem">ð</span>Senha
+        <span style="font-size:.95rem">🔑</span>Senha
       </button>
       <button onclick="forceResetCache()" title="Recarregar Dados"
         style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(255,140,50,.12);border:1px solid rgba(255,140,50,.25);color:rgba(255,180,120,.85);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(255,140,50,.22)'" onmouseout="this.style.background='rgba(255,140,50,.12)'">
-        <span style="font-size:.95rem">ð</span>Recarregar
+        <span style="font-size:.95rem">🔄</span>Recarregar
       </button>
     </div>
   </div>
   <div class="version" style="display:flex;align-items:center;justify-content:space-between">
     <span>Compliance Hub v1.0</span>
-    <span id="save-indicator" style="font-size:.68rem;color:rgba(255,255,255,.4)">ð¾ Auto-salvo ativo</span>
+    <span id="save-indicator" style="font-size:.68rem;color:rgba(255,255,255,.4)">💾 Auto-salvo ativo</span>
   </div>
 </div>
 
@@ -256,7 +256,7 @@
   <!-- TOPBAR -->
   <div id="topbar">
     <div style="display:flex;align-items:center;gap:12px">
-      <button id="mobile-menu-btn" onclick="toggleMobile()">â°</button>
+      <button id="mobile-menu-btn" onclick="toggleMobile()">☰</button>
       <div class="page-title" id="topbar-title">Dashboard</div>
     </div>
     <div class="topbar-right">
@@ -266,7 +266,7 @@
         <span id="user-name">Gestão Compliance</span>
       </div>
       <button class="btn-logout" onclick="doLogout()" title="Sair do sistema">
-        â Sair
+        ⎋ Sair
       </button>
     </div>
   </div>
@@ -274,26 +274,26 @@
   <!-- CONTENT -->
   <div id="content">
 
-    <!-- ââââââââââââââââââââââââââââââââââââââââââ
+    <!-- ══════════════════════════════════════════
          DASHBOARD
-    ââââââââââââââââââââââââââââââââââââââââââ -->
+    ══════════════════════════════════════════ -->
 
-    <!-- ââââââââââââââââââââââââââââââââââââââââââ
+    <!-- ══════════════════════════════════════════
          AGENDA
-    ââââââââââââââââââââââââââââââââââââââââââ -->
+    ══════════════════════════════════════════ -->
     <div class="page" id="page-agenda">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
         <div style="display:flex;align-items:center;gap:12px">
-          <button onclick="agendaNavMonth(-1)" class="btn btn-outline btn-sm" style="padding:6px 12px">â¹</button>
+          <button onclick="agendaNavMonth(-1)" class="btn btn-outline btn-sm" style="padding:6px 12px">‹</button>
           <h2 id="agenda-month-title" style="font-size:1.1rem;font-weight:800;color:var(--primary);min-width:180px;text-align:center"></h2>
-          <button onclick="agendaNavMonth(1)" class="btn btn-outline btn-sm" style="padding:6px 12px">âº</button>
+          <button onclick="agendaNavMonth(1)" class="btn btn-outline btn-sm" style="padding:6px 12px">›</button>
           <button onclick="agendaGoToday()" class="btn btn-outline btn-sm">Hoje</button>
         </div>
         <div style="display:flex;gap:8px">
-          <button onclick="agendaSetView('mes')" id="btn-view-mes" class="btn btn-outline btn-sm">ð Mês</button>
-          <button onclick="agendaSetView('semana')" id="btn-view-semana" class="btn btn-outline btn-sm">ð Semana</button>
-          <button onclick="agendaSetView('lista')" id="btn-view-lista" class="btn btn-outline btn-sm">ð Lista</button>
-          <button onclick="agendaSyncNuvem()" class="btn btn-outline btn-sm" title="Enviar eventos para a nuvem">âï¸ Sincronizar</button>
+          <button onclick="agendaSetView('mes')" id="btn-view-mes" class="btn btn-outline btn-sm">📅 Mês</button>
+          <button onclick="agendaSetView('semana')" id="btn-view-semana" class="btn btn-outline btn-sm">📆 Semana</button>
+          <button onclick="agendaSetView('lista')" id="btn-view-lista" class="btn btn-outline btn-sm">📋 Lista</button>
+          <button onclick="agendaSyncNuvem()" class="btn btn-outline btn-sm" title="Enviar eventos para a nuvem">☁️ Sincronizar</button>
           <button onclick="agendaNovoEvento()" class="btn btn-accent btn-sm">+ Evento</button>
         </div>
       </div>
@@ -306,8 +306,8 @@
       <!-- SELECTED DAY EVENTS -->
       <div id="agenda-day-panel" style="display:none;margin-top:14px" class="section">
         <div class="section-header">
-          <h2>ð <span id="agenda-day-panel-title"></span></h2>
-          <button class="btn btn-outline btn-sm" onclick="document.getElementById('agenda-day-panel').style.display='none'">â</button>
+          <h2>📌 <span id="agenda-day-panel-title"></span></h2>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('agenda-day-panel').style.display='none'">✕</button>
         </div>
         <div class="section-body" id="agenda-day-panel-body"></div>
       </div>
@@ -317,28 +317,28 @@
 
       <div class="stat-grid">
         <div class="stat-card highlight kpi-card-clickable" onclick="openDashDrill('controles')" title="Ver todos os controles internos">
-          <div class="stat-icon" style="background:rgba(0,196,154,.2)">ð¡ï¸</div>
+          <div class="stat-icon" style="background:rgba(0,196,154,.2)">🛡️</div>
           <div>
             <div class="stat-num" id="dash-total-controles">0</div>
             <div class="stat-label">Controles Monitorados</div>
           </div>
         </div>
         <div class="stat-card kpi-card-clickable" onclick="openDashDrill('riscos')" title="Ver riscos Altos e Críticos">
-          <div class="stat-icon amber">â ï¸</div>
+          <div class="stat-icon amber">⚠️</div>
           <div>
             <div class="stat-num" id="dash-riscos-altos" style="color:var(--warn)">0</div>
             <div class="stat-label">Planos de Ação</div>
           </div>
         </div>
         <div class="stat-card kpi-card-clickable" onclick="openDashDrill('acoes')" title="Ver ações e planos vencidos">
-          <div class="stat-icon red">ð¨</div>
+          <div class="stat-icon red">🚨</div>
           <div>
             <div class="stat-num" id="dash-acoes-venc" style="color:var(--danger)">0</div>
             <div class="stat-label">Ações Vencidas</div>
           </div>
         </div>
         <div class="stat-card kpi-card-clickable" onclick="openDashDrill('denuncias')" title="Ver denúncias Abertas e Em Análise">
-          <div class="stat-icon blue">ð¢</div>
+          <div class="stat-icon blue">📢</div>
           <div>
             <div class="stat-num" id="dash-denuncias" style="color:var(--info)">0</div>
             <div class="stat-label">Denúncias em Aberto</div>
@@ -354,7 +354,7 @@
             <h2><span id="dash-dd-icon"></span> <span id="dash-dd-title"></span>
               <span id="dash-dd-count" style="font-size:.8rem;font-weight:500;color:var(--text-muted);margin-left:8px"></span>
             </h2>
-            <button class="btn btn-outline btn-sm" onclick="closeDashDrill()">â Fechar</button>
+            <button class="btn btn-outline btn-sm" onclick="closeDashDrill()">✕ Fechar</button>
           </div>
           <div class="section-body" style="padding:0">
             <div class="table-wrap"><table id="dash-dd-table">
@@ -367,19 +367,19 @@
 
       <div class="chart-grid">
         <div class="chart-box">
-          <h3>ð Riscos por Nível</h3>
+          <h3>📈 Riscos por Nível</h3>
           <div class="bar-chart" id="chart-riscos"></div>
         </div>
         <div class="chart-box">
-          <h3>ð Status dos Planos de Ação</h3>
+          <h3>📋 Status dos Planos de Ação</h3>
           <div class="bar-chart" id="chart-controles"></div>
         </div>
         <div class="chart-box">
-          <h3>ð Planos de Ação por Status</h3>
+          <h3>📋 Planos de Ação por Status</h3>
           <div class="bar-chart" id="chart-planos"></div>
         </div>
         <div class="chart-box">
-          <h3>ð¢ Denúncias por Nível de Perigo</h3>
+          <h3>📢 Denúncias por Nível de Perigo</h3>
           <div class="bar-chart" id="chart-denuncias"></div>
         </div>
       </div>
@@ -387,7 +387,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div class="section" style="margin-bottom:0">
           <div class="section-header">
-            <h2>â ï¸ Riscos Críticos e Altos</h2>
+            <h2>⚠️ Riscos Críticos e Altos</h2>
             <button class="btn btn-outline btn-sm" onclick="goto('controles', document.querySelector('[data-page=controles]'))">Ver todos</button>
           </div>
           <div class="section-body" style="padding:0">
@@ -397,13 +397,13 @@
               </tr></thead>
               <tbody id="dash-controles-urgentes"></tbody>
             </table>
-            <div class="empty hidden" id="dash-empty-ctrl"><div class="ico">â</div>Nenhum risco crítico ou alto.</div>
+            <div class="empty hidden" id="dash-empty-ctrl"><div class="ico">✅</div>Nenhum risco crítico ou alto.</div>
           </div>
         </div>
 
         <div class="section" style="margin-bottom:0">
           <div class="section-header">
-            <h2>ð Ações com Prazo Próximo</h2>
+            <h2>📋 Ações com Prazo Próximo</h2>
             <button class="btn btn-outline btn-sm" onclick="goto('planos-acao', document.querySelector('[data-page=planos-acao]'))">Ver todos</button>
           </div>
           <div class="section-body" style="padding:0">
@@ -413,42 +413,42 @@
               </tr></thead>
               <tbody id="dash-acoes-urgentes"></tbody>
             </table>
-            <div class="empty hidden" id="dash-empty-acao"><div class="ico">â</div>Nenhuma ação urgente.</div>
+            <div class="empty hidden" id="dash-empty-acao"><div class="ico">✅</div>Nenhuma ação urgente.</div>
           </div>
         </div>
       </div>
 
     </div><!-- /dashboard -->
 
-    <!-- ââââââââââââââââââââââââââââââââââââââââââ
+    <!-- ══════════════════════════════════════════
          FILIAIS E SETORES
-    ââââââââââââââââââââââââââââââââââââââââââ -->
+    ══════════════════════════════════════════ -->
     <div class="page" id="page-filiais">
       <div class="section">
         <div class="section-header">
-          <h2>ð¢ Filiais e Setores</h2>
+          <h2>🏢 Filiais e Setores</h2>
           <button class="btn btn-accent btn-sm" onclick="openModalFilial()">+ Nova Filial</button>
         </div>
         <div class="section-body">
           <div class="filter-bar">
-            <input type="text" id="filtro-filial" placeholder="ð Buscar filial ou setor..." oninput="renderFiliais()"/>
+            <input type="text" id="filtro-filial" placeholder="🔍 Buscar filial ou setor..." oninput="renderFiliais()"/>
           </div>
           <div id="filiais-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;"></div>
         </div>
       </div>
     </div>
 
-    <!-- ââââââââââââââââââââââââââââââââââââââââââ
+    <!-- ══════════════════════════════════════════
          MAPEAMENTO DE RISCO
-    ââââââââââââââââââââââââââââââââââââââââââ -->
+    ══════════════════════════════════════════ -->
     <div class="page" id="page-mapa-risco">
       <!-- HEADER -->
       <div class="section-header" style="margin-bottom:14px">
-        <h2>ðºï¸ Mapeamento de Riscos</h2>
+        <h2>🗺️ Mapeamento de Riscos</h2>
         <div style="display:flex;gap:7px;flex-wrap:wrap">
-          <button class="btn-ai-gem" id="btn-ai-risco" onclick="aiAnalisarRiscos()">ð¤ Avaliar com IA</button>
-          <button class="btn btn-outline btn-sm" onclick="rmToggleUnitsPanel()">âï¸ Unidades</button>
-          <button class="btn btn-outline btn-sm" onclick="rmToggleImport()">ð Importar Word</button>
+          <button class="btn-ai-gem" id="btn-ai-risco" onclick="aiAnalisarRiscos()">🤖 Avaliar com IA</button>
+          <button class="btn btn-outline btn-sm" onclick="rmToggleUnitsPanel()">⚙️ Unidades</button>
+          <button class="btn btn-outline btn-sm" onclick="rmToggleImport()">📎 Importar Word</button>
           <button class="btn btn-accent btn-sm" onclick="rmNovoRisco()">+ Novo Risco</button>
         </div>
       </div>
@@ -457,8 +457,8 @@
       <!-- IMPORT WORD PANEL -->
       <div id="rm-import-wrap" style="display:none;margin-bottom:14px" class="section">
         <div class="section-header">
-          <h2>ð Importar Word</h2>
-          <button class="btn btn-outline btn-sm" onclick="rmToggleImport()">â Fechar</button>
+          <h2>📎 Importar Word</h2>
+          <button class="btn btn-outline btn-sm" onclick="rmToggleImport()">✕ Fechar</button>
         </div>
         <div class="section-body">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
@@ -470,7 +470,7 @@
                 ondragover="event.preventDefault();this.classList.add('drag')"
                 ondragleave="this.classList.remove('drag')"
                 ondrop="event.preventDefault();this.classList.remove('drag');rmSetFileAndPreview(event.dataTransfer.files[0])">
-                <div style="font-size:2rem;margin-bottom:6px">ð</div>
+                <div style="font-size:2rem;margin-bottom:6px">📄</div>
                 <div style="font-weight:700;color:var(--primary);margin-bottom:3px" id="rm-file-name">Arraste o arquivo .docx aqui</div>
                 <div style="font-size:.8rem;color:var(--text-muted)">ou clique para selecionar</div>
                 <input type="file" id="rm-file-inp" accept=".docx" style="display:none" onchange="rmSetFileAndPreview(this.files[0])"/>
@@ -491,7 +491,7 @@
               </label>
               <button id="rm-import-btn" onclick="rmProcessWord()" disabled
                 class="btn btn-accent" style="width:100%;margin-top:14px;padding:11px;justify-content:center;opacity:.5">
-                ð¥ Importar para a Unidade
+                📥 Importar para a Unidade
               </button>
             </div>
           </div>
@@ -502,8 +502,8 @@
       <!-- GERENCIAR UNIDADES PANEL -->
       <div id="rm-units-wrap" style="display:none;margin-bottom:14px" class="section">
         <div class="section-header">
-          <h2>âï¸ Gerenciar Unidades</h2>
-          <button class="btn btn-outline btn-sm" onclick="document.getElementById('rm-units-wrap').style.display='none'">â Fechar</button>
+          <h2>⚙️ Gerenciar Unidades</h2>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('rm-units-wrap').style.display='none'">✕ Fechar</button>
         </div>
         <div class="section-body">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
@@ -517,7 +517,7 @@
               <div style="font-size:.74rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:10px">Nova unidade</div>
               <div class="form-grid" style="grid-template-columns:1fr 1fr">
                 <div class="field full"><label>Nome da Unidade *</label><input type="text" id="rm-new-unit-name" placeholder="Ex: Logística, Compras..."/></div>
-                <div class="field"><label>Ãcone (emoji)</label><input type="text" id="rm-new-unit-icon" placeholder="ð" maxlength="2" style="font-size:1.3rem;text-align:center"/></div>
+                <div class="field"><label>Ícone (emoji)</label><input type="text" id="rm-new-unit-icon" placeholder="📋" maxlength="2" style="font-size:1.3rem;text-align:center"/></div>
                 <div class="field"><label>Cor</label>
                   <input type="color" id="rm-new-unit-cor" value="#3b82f6" style="width:100%;height:38px;border-radius:8px;border:1.5px solid var(--border);cursor:pointer"/>
                 </div>
@@ -535,18 +535,18 @@
       </div>
     </div>
 
-    <!-- ââââââââââââââââââââââââââââââââââââââââââ
+    <!-- ══════════════════════════════════════════
          CONTROLES INTERNOS
-    ââââââââââââââââââââââââââââââââââââââââââ -->
+    ══════════════════════════════════════════ -->
     <div class="page" id="page-controles">
       <div class="section">
         <div class="section-header">
-          <h2>ð Controles Internos</h2>
+          <h2>🔒 Controles Internos</h2>
           <button class="btn btn-accent btn-sm" onclick="openModalControle()">+ Novo Controle</button>
         </div>
         <div class="section-body">
           <div class="filter-bar">
-            <input type="text" id="filtro-ctrl-txt" placeholder="ð Buscar controle..." oninput="renderControles()"/>
+            <input type="text" id="filtro-ctrl-txt" placeholder="🔍 Buscar controle..." oninput="renderControles()"/>
             <select id="filtro-ctrl-status" onchange="renderControles()">
               <option value="">Todos os status</option>
               <option value="Concluído">Concluído</option>
@@ -571,13 +571,13 @@
       </div>
     </div>
 
-    <!-- ââââââââââââââââââââââââââââââââââââââââââ
-         PLANOS DE AÃÃO
-    ââââââââââââââââââââââââââââââââââââââââââ -->
+    <!-- ══════════════════════════════════════════
+         PLANOS DE AÇÃO
+    ══════════════════════════════════════════ -->
     <div class="page" id="page-planos-acao">
       <div class="section">
         <div class="section-header">
-          <h2>ð Planos de Ação</h2>
+          <h2>📋 Planos de Ação</h2>
           <button class="btn btn-accent btn-sm" onclick="openModalPlano()">+ Novo Plano</button>
         </div>
         <div class="section-body">
@@ -589,7 +589,7 @@
             <button class="pill-tab" onclick="filterPlanos('Vencido',this)">Vencido</button>
           </div>
           <div class="filter-bar">
-            <input type="text" id="filtro-plano-txt" placeholder="ð Buscar plano..." oninput="renderPlanos()"/>
+            <input type="text" id="filtro-plano-txt" placeholder="🔍 Buscar plano..." oninput="renderPlanos()"/>
             <select id="filtro-plano-filial" onchange="renderPlanos()">
               <option value="">Todas as filiais</option>
             </select>
@@ -610,42 +610,42 @@
       </div>
     </div>
 
-    <!-- ââââââââââââââââââââââââââââââââââââââââââ
-         CANAL DE DENÃNCIA
-    ââââââââââââââââââââââââââââââââââââââââââ -->
+    <!-- ══════════════════════════════════════════
+         CANAL DE DENÚNCIA
+    ══════════════════════════════════════════ -->
     <div class="page" id="page-canal-denuncia">
 
       <div class="stat-grid" style="grid-template-columns:repeat(5,1fr)">
-        <div class="stat-card highlight kpi-card-clickable" onclick="openDnDrilldown('total','ð¢','Total de Denúncias')" title="Ver todas as denúncias">
-          <div class="stat-icon" style="background:rgba(0,196,154,.2)">ð¢</div>
+        <div class="stat-card highlight kpi-card-clickable" onclick="openDnDrilldown('total','📢','Total de Denúncias')" title="Ver todas as denúncias">
+          <div class="stat-icon" style="background:rgba(0,196,154,.2)">📢</div>
           <div>
             <div class="stat-num" id="dn-total">0</div>
             <div class="stat-label">Total de Denúncias</div>
           </div>
         </div>
-        <div class="stat-card kpi-card-clickable" onclick="openDnDrilldown('analise','ð','Em Análise')" title="Ver denúncias em análise">
-          <div class="stat-icon amber">ð</div>
+        <div class="stat-card kpi-card-clickable" onclick="openDnDrilldown('analise','🔍','Em Análise')" title="Ver denúncias em análise">
+          <div class="stat-icon amber">🔍</div>
           <div>
             <div class="stat-num" id="dn-analise" style="color:var(--warn)">0</div>
             <div class="stat-label">Em Análise</div>
           </div>
         </div>
-        <div class="stat-card kpi-card-clickable" onclick="openDnDrilldown('encerrada','â','Encerradas')" title="Ver denúncias encerradas">
-          <div class="stat-icon teal">â</div>
+        <div class="stat-card kpi-card-clickable" onclick="openDnDrilldown('encerrada','✅','Encerradas')" title="Ver denúncias encerradas">
+          <div class="stat-icon teal">✅</div>
           <div>
             <div class="stat-num" id="dn-encerrada" style="color:var(--accent)">0</div>
             <div class="stat-label">Encerradas</div>
           </div>
         </div>
-        <div class="stat-card kpi-card-clickable" onclick="openDnDrilldown('graves','ð¨','Graves / Gravíssimas')" title="Ver denúncias graves">
-          <div class="stat-icon red">ð¨</div>
+        <div class="stat-card kpi-card-clickable" onclick="openDnDrilldown('graves','🚨','Graves / Gravíssimas')" title="Ver denúncias graves">
+          <div class="stat-icon red">🚨</div>
           <div>
             <div class="stat-num" id="dn-urgente" style="color:var(--danger)">0</div>
             <div class="stat-label">Graves / Gravíssimas</div>
           </div>
         </div>
-        <div class="stat-card kpi-card-clickable" onclick="openDnDrilldown('sla','â±ï¸','SLA Vencido â mais de 90 dias')" title="Ver denúncias com SLA vencido">
-          <div class="stat-icon" style="background:#ede9fe">â±ï¸</div>
+        <div class="stat-card kpi-card-clickable" onclick="openDnDrilldown('sla','⏱️','SLA Vencido — mais de 90 dias')" title="Ver denúncias com SLA vencido">
+          <div class="stat-icon" style="background:#ede9fe">⏱️</div>
           <div>
             <div class="stat-num" id="dn-sla-venc" style="color:var(--purple)">0</div>
             <div class="stat-label">SLA Vencido (90d)</div>
@@ -657,11 +657,11 @@
       <div id="dn-drilldown" style="display:none;margin-bottom:18px;border:2px solid var(--accent);border-radius:12px;background:var(--card);overflow:hidden;animation:slideDown .2s ease">
         <div class="dd-header" id="dn-dd-header" style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:linear-gradient(135deg,var(--primary) 0%,var(--primary-light) 100%);border-bottom:3px solid var(--accent)">
           <div style="display:flex;align-items:center;gap:8px;font-size:.95rem;font-weight:700;color:#fff">
-            <span id="dn-dd-icon">ð¢</span>
+            <span id="dn-dd-icon">📢</span>
             <span id="dn-dd-title">Denúncias</span>
             <span id="dn-dd-count" style="font-size:.8rem;opacity:.7;margin-left:4px"></span>
           </div>
-          <button onclick="closeDnDrilldown()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.3)'" onmouseout="this.style.background='rgba(255,255,255,.15)'">â</button>
+          <button onclick="closeDnDrilldown()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.3)'" onmouseout="this.style.background='rgba(255,255,255,.15)'">✕</button>
         </div>
         <div style="max-height:420px;overflow-y:auto">
           <div class="table-wrap">
@@ -687,7 +687,7 @@
 
       <div class="section">
         <div class="section-header">
-          <h2>ð¢ Canal de Denúncia</h2>
+          <h2>📢 Canal de Denúncia</h2>
           <button class="btn btn-accent btn-sm" onclick="openModalDenuncia()">+ Registrar Denúncia</button>
         </div>
         <div class="section-body">
@@ -695,22 +695,22 @@
           <!-- ABAS -->
           <div class="dn-pill-tabs">
             <button class="dn-pill-tab active" data-dn-tab="recebidas" onclick="switchDnTab('recebidas',this)">
-              ð¥ Denúncias Recebidas <span class="tab-count" id="tab-count-recebidas">0</span>
+              📥 Denúncias Recebidas <span class="tab-count" id="tab-count-recebidas">0</span>
             </button>
             <button class="dn-pill-tab" data-dn-tab="analise" onclick="switchDnTab('analise',this)">
-              ð Em Análise <span class="tab-count" id="tab-count-analise">0</span>
+              🔍 Em Análise <span class="tab-count" id="tab-count-analise">0</span>
             </button>
             <button class="dn-pill-tab" data-dn-tab="encerradas" onclick="switchDnTab('encerradas',this)">
-              â Encerradas / Arquivadas <span class="tab-count" id="tab-count-encerradas">0</span>
+              ✅ Encerradas / Arquivadas <span class="tab-count" id="tab-count-encerradas">0</span>
             </button>
             <button class="dn-pill-tab" data-dn-tab="sla" onclick="switchDnTab('sla',this)">
-              â±ï¸ Painel SLA <span class="tab-count" id="tab-count-sla">0</span>
+              ⏱️ Painel SLA <span class="tab-count" id="tab-count-sla">0</span>
             </button>
           </div>
 
           <!-- FILTROS -->
           <div class="filter-bar">
-            <input type="text" id="filtro-dn-txt" placeholder="ð Buscar protocolo, tipo, filial..." oninput="renderDenuncias()"/>
+            <input type="text" id="filtro-dn-txt" placeholder="🔍 Buscar protocolo, tipo, filial..." oninput="renderDenuncias()"/>
             <select id="filtro-dn-categoria" onchange="renderDenuncias()">
               <option value="">Todas as categorias</option>
               <option>Assédio moral</option><option>Fraude ou desvio de valores</option>
@@ -751,7 +751,7 @@
           <!-- TAB: SLA -->
           <div id="dn-tab-sla" style="display:none">
             <div style="margin-bottom:16px;padding:14px 18px;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;font-size:.86rem;color:#92400e;display:flex;align-items:center;gap:10px">
-              â±ï¸ <strong>SLA máximo: 90 dias corridos</strong> a partir da data de recebimento. Denúncias acima de 70% do prazo exigem atenção imediata.
+              ⏱️ <strong>SLA máximo: 90 dias corridos</strong> a partir da data de recebimento. Denúncias acima de 70% do prazo exigem atenção imediata.
             </div>
             <div class="table-wrap">
               <table>
@@ -777,18 +777,18 @@
     </div>
 
 
-    <!-- ââââââââââââââââââââââââââââââââââââââââââ
-         RELATÃRIOS â CANAL DE DENÃNCIA
-    ââââââââââââââââââââââââââââââââââââââââââ -->
+    <!-- ══════════════════════════════════════════
+         RELATÓRIOS — CANAL DE DENÚNCIA
+    ══════════════════════════════════════════ -->
     <div class="page" id="page-relatorios">
 
-      <!-- FILTROS DE RELATÃRIO -->
+      <!-- FILTROS DE RELATÓRIO -->
       <div class="section" style="margin-bottom:18px">
         <div class="section-header">
-          <h2>ð Relatórios â Canal de Denúncia</h2>
+          <h2>📑 Relatórios — Canal de Denúncia</h2>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-accent btn-sm" onclick="exportRelatorio()">â¬ï¸ Exportar CSV</button>
-            <button class="btn btn-outline btn-sm" onclick="printRelatorio()">ð¨ï¸ Imprimir</button>
+            <button class="btn btn-accent btn-sm" onclick="exportRelatorio()">⬇️ Exportar CSV</button>
+            <button class="btn btn-outline btn-sm" onclick="printRelatorio()">🖨️ Imprimir</button>
           </div>
         </div>
         <div class="section-body">
@@ -819,28 +819,28 @@
             </select>
             <select id="rel-periodo" onchange="renderRelatorios()">
               <option value="">Todo período</option>
-              <option value="30">Ãltimos 30 dias</option>
-              <option value="60">Ãltimos 60 dias</option>
-              <option value="90">Ãltimos 90 dias</option>
-              <option value="180">Ãltimos 180 dias</option>
-              <option value="365">Ãltimo ano</option>
+              <option value="30">Últimos 30 dias</option>
+              <option value="60">Últimos 60 dias</option>
+              <option value="90">Últimos 90 dias</option>
+              <option value="180">Últimos 180 dias</option>
+              <option value="365">Último ano</option>
             </select>
           </div>
         </div>
       </div>
 
-      <!-- KPIs RELATÃRIO -->
+      <!-- KPIs RELATÓRIO -->
       <div class="stat-grid" style="margin-bottom:18px" id="rel-kpis"></div>
 
       <!-- DRILLDOWN PANEL (aparece ao clicar nos KPIs) -->
       <div id="rel-drilldown">
         <div class="dd-header">
           <div class="dd-title">
-            <span id="dd-icon">ð¢</span>
+            <span id="dd-icon">📢</span>
             <span id="dd-title-text">Denúncias</span>
             <span class="dd-count" id="dd-count"></span>
           </div>
-          <button class="dd-close" onclick="closeDrilldown()" title="Fechar">â</button>
+          <button class="dd-close" onclick="closeDrilldown()" title="Fechar">✕</button>
         </div>
         <div class="dd-body">
           <div class="table-wrap">
@@ -864,26 +864,26 @@
         </div>
       </div>
 
-      <!-- CHARTS RELATÃRIO -->
+      <!-- CHARTS RELATÓRIO -->
       <div class="chart-grid" style="margin-bottom:18px">
         <div class="chart-box">
-          <h3>ð¢ Denúncias por Filial</h3>
+          <h3>🏢 Denúncias por Filial</h3>
           <div class="bar-chart" id="rel-chart-filial"></div>
         </div>
         <div class="chart-box">
-          <h3>ðï¸ Denúncias por Categoria</h3>
+          <h3>🗂️ Denúncias por Categoria</h3>
           <div class="bar-chart" id="rel-chart-cat"></div>
         </div>
         <div class="chart-box">
-          <h3>ð¦ Denúncias por Nível de Perigo</h3>
+          <h3>🚦 Denúncias por Nível de Perigo</h3>
           <div class="bar-chart" id="rel-chart-perigo"></div>
         </div>
         <div class="chart-box">
-          <h3>ð Denúncias por Status</h3>
+          <h3>📊 Denúncias por Status</h3>
           <div class="bar-chart" id="rel-chart-status"></div>
         </div>
         <div class="chart-box" style="grid-column:1/-1">
-          <h3>âï¸ Conclusão das Denúncias</h3>
+          <h3>⚖️ Conclusão das Denúncias</h3>
           <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
             <div style="flex:1;min-width:240px"><div class="bar-chart" id="rel-chart-conclusao"></div></div>
             <div id="rel-conclusao-kpis" style="display:flex;gap:10px;flex-wrap:wrap"></div>
@@ -893,7 +893,7 @@
 
       <!-- RANKING FILIAIS (tabela detalhada) -->
       <div class="section" style="margin-bottom:18px">
-        <div class="section-header"><h2>ð Ranking de Denúncias por Filial</h2></div>
+        <div class="section-header"><h2>🏆 Ranking de Denúncias por Filial</h2></div>
         <div class="section-body" style="padding:0">
           <div class="table-wrap">
             <table>
@@ -910,7 +910,7 @@
 
       <!-- RANKING SETORES -->
       <div class="section" style="margin-bottom:18px">
-        <div class="section-header"><h2>ð Ranking de Denúncias por Setor</h2></div>
+        <div class="section-header"><h2>📂 Ranking de Denúncias por Setor</h2></div>
         <div class="section-body" style="padding:0">
           <div class="table-wrap">
             <table>
@@ -927,7 +927,7 @@
       <!-- LISTAGEM COMPLETA FILTRADA -->
       <div class="section">
         <div class="section-header">
-          <h2>ð Listagem Completa Filtrada</h2>
+          <h2>📋 Listagem Completa Filtrada</h2>
           <span id="rel-count-label" style="font-size:.82rem;color:var(--text-muted);font-weight:600"></span>
         </div>
         <div class="section-body" style="padding:0">
@@ -947,20 +947,20 @@
 
 
 
-    <!-- ââââââââââââââââââââââââââââââââââââââââââ
+    <!-- ══════════════════════════════════════════
          IMPORTAR PLANILHA
-    ââââââââââââââââââââââââââââââââââââââââââ -->
+    ══════════════════════════════════════════ -->
     <div class="page" id="page-importar">
 
-      <!-- INSTRUÃÃES -->
+      <!-- INSTRUÇÕES -->
       <div class="section" style="margin-bottom:18px">
         <div class="section-header">
-          <h2>â¬ï¸ Importar Planilha de Denúncias</h2>
+          <h2>⬆️ Importar Planilha de Denúncias</h2>
         </div>
         <div class="section-body">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
             <div>
-              <div style="font-size:.92rem;font-weight:700;color:var(--primary);margin-bottom:10px">ð Colunas esperadas na planilha:</div>
+              <div style="font-size:.92rem;font-weight:700;color:var(--primary);margin-bottom:10px">📋 Colunas esperadas na planilha:</div>
               <div style="display:flex;flex-direction:column;gap:6px;font-size:.83rem">
                 <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px">
                   <span style="font-family:monospace;background:#f0f4f8;padding:2px 8px;border-radius:4px;font-size:.78rem;font-weight:700">Id</span><span style="color:var(--text-muted)">Número único da denúncia</span>
@@ -973,28 +973,28 @@
                   <span style="font-family:monospace;background:#f0f4f8;padding:2px 8px;border-radius:4px;font-size:.78rem;font-weight:700">Nome (opcional)</span><span style="color:var(--text-muted)">Nome do denunciante (se houver)</span>
                   <span style="font-family:monospace;background:#f0f4f8;padding:2px 8px;border-radius:4px;font-size:.78rem;font-weight:700">ação inicial</span><span style="color:var(--text-muted)">Ação tomada pela equipe</span>
                   <span style="font-family:monospace;background:#f0f4f8;padding:2px 8px;border-radius:4px;font-size:.78rem;font-weight:700">conclusão</span><span style="color:var(--text-muted)">Texto de encerramento</span>
-                  <span style="font-family:monospace;background:#f0f4f8;padding:2px 8px;border-radius:4px;font-size:.78rem;font-weight:700">Nivel</span><span style="color:var(--text-muted)">LEVE, MÃDIO ou GRAVE</span>
+                  <span style="font-family:monospace;background:#f0f4f8;padding:2px 8px;border-radius:4px;font-size:.78rem;font-weight:700">Nivel</span><span style="color:var(--text-muted)">LEVE, MÉDIO ou GRAVE</span>
                 </div>
               </div>
             </div>
             <div>
-              <div style="font-size:.92rem;font-weight:700;color:var(--primary);margin-bottom:10px">âï¸ Regras de importação:</div>
+              <div style="font-size:.92rem;font-weight:700;color:var(--primary);margin-bottom:10px">⚙️ Regras de importação:</div>
               <div style="display:flex;flex-direction:column;gap:8px;font-size:.84rem;color:var(--text-muted)">
-                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--accent);font-size:1rem;flex-shrink:0">â</span><span>Denúncias com <strong>Id já existente</strong> no sistema serão ignoradas (sem duplicação)</span></div>
-                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--accent);font-size:1rem;flex-shrink:0">â</span><span>Linhas com Id = "area de test" ou vazias são automaticamente ignoradas</span></div>
-                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--accent);font-size:1rem;flex-shrink:0">â</span><span>Protocolo gerado automaticamente no padrão <strong>DN-AAAA-NNN</strong></span></div>
-                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--accent);font-size:1rem;flex-shrink:0">â</span><span>Status inferido automaticamente: sem ação = Aberta, com ação = Em Análise, com conclusão = Encerrada</span></div>
-                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--accent);font-size:1rem;flex-shrink:0">â</span><span>Relato importado <strong>completo</strong>, sem truncagem</span></div>
-                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--warn);font-size:1rem;flex-shrink:0">â ï¸</span><span>Formatos aceitos: <strong>.xlsx</strong> e <strong>.csv</strong></span></div>
+                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--accent);font-size:1rem;flex-shrink:0">✅</span><span>Denúncias com <strong>Id já existente</strong> no sistema serão ignoradas (sem duplicação)</span></div>
+                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--accent);font-size:1rem;flex-shrink:0">✅</span><span>Linhas com Id = "area de test" ou vazias são automaticamente ignoradas</span></div>
+                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--accent);font-size:1rem;flex-shrink:0">✅</span><span>Protocolo gerado automaticamente no padrão <strong>DN-AAAA-NNN</strong></span></div>
+                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--accent);font-size:1rem;flex-shrink:0">✅</span><span>Status inferido automaticamente: sem ação = Aberta, com ação = Em Análise, com conclusão = Encerrada</span></div>
+                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--accent);font-size:1rem;flex-shrink:0">✅</span><span>Relato importado <strong>completo</strong>, sem truncagem</span></div>
+                <div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--warn);font-size:1rem;flex-shrink:0">⚠️</span><span>Formatos aceitos: <strong>.xlsx</strong> e <strong>.csv</strong></span></div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ÃREA DE UPLOAD -->
+      <!-- ÁREA DE UPLOAD -->
       <div class="section" style="margin-bottom:18px">
-        <div class="section-header"><h2>ð Selecionar Arquivo</h2></div>
+        <div class="section-header"><h2>📂 Selecionar Arquivo</h2></div>
         <div class="section-body">
           <div id="drop-zone"
             style="border:2px dashed var(--border);border-radius:12px;padding:48px 24px;text-align:center;cursor:pointer;transition:all .2s;background:#f8fafc"
@@ -1002,26 +1002,26 @@
             ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='#f0fdf9'"
             ondragleave="this.style.borderColor='var(--border)';this.style.background='#f8fafc'"
             ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='#f8fafc';handleFileDrop(event)">
-            <div style="font-size:2.5rem;margin-bottom:10px">ð</div>
+            <div style="font-size:2.5rem;margin-bottom:10px">📊</div>
             <div style="font-size:1rem;font-weight:700;color:var(--primary);margin-bottom:6px">Arraste a planilha aqui ou clique para selecionar</div>
             <div style="font-size:.82rem;color:var(--text-muted)">Arquivos .xlsx ou .csv · Planilha no padrão Canal de Denúncias</div>
           </div>
           <input type="file" id="file-input" accept=".xlsx,.csv,.xls" style="display:none" onchange="handleFileSelect(event)"/>
           <div id="file-selected-info" style="display:none;margin-top:14px;padding:12px 16px;background:#f0fdf9;border:1px solid var(--accent);border-radius:8px;display:flex;align-items:center;gap:12px">
-            <span style="font-size:1.4rem">ð</span>
+            <span style="font-size:1.4rem">📄</span>
             <div>
               <div id="file-name-label" style="font-weight:700;font-size:.9rem;color:var(--primary)"></div>
               <div id="file-size-label" style="font-size:.78rem;color:var(--text-muted)"></div>
             </div>
-            <button class="btn btn-danger btn-sm" style="margin-left:auto" onclick="clearFileImport()">â Remover</button>
+            <button class="btn btn-danger btn-sm" style="margin-left:auto" onclick="clearFileImport()">✕ Remover</button>
           </div>
         </div>
       </div>
 
-      <!-- PRÃVIA DOS DADOS -->
+      <!-- PRÉVIA DOS DADOS -->
       <div class="section" id="import-preview-section" style="display:none;margin-bottom:18px">
         <div class="section-header">
-          <h2>ðï¸ Prévia da Importação</h2>
+          <h2>👁️ Prévia da Importação</h2>
           <div style="display:flex;gap:8px;align-items:center">
             <span id="import-preview-stats" style="font-size:.82rem;color:var(--text-muted);font-weight:600"></span>
           </div>
@@ -1042,12 +1042,12 @@
         </div>
       </div>
 
-      <!-- BOTÃO CONFIRMAR -->
+      <!-- BOTÃO CONFIRMAR -->
       <div id="import-actions" style="display:none;margin-bottom:18px">
         <div style="display:flex;gap:12px;align-items:center;justify-content:flex-end">
           <button class="btn btn-outline" onclick="clearFileImport()">Cancelar</button>
           <button class="btn btn-accent" id="btn-confirm-import" onclick="confirmImport()" style="padding:10px 28px;font-size:.95rem">
-            â Confirmar Importação
+            ✅ Confirmar Importação
           </button>
         </div>
       </div>
@@ -1059,16 +1059,16 @@
 
   </div><!-- /content -->
 
-  <!-- ââââââââââââââââââââââââââââââââââââââââââ
-       FLOWBOARD â fora do #content para ocupar tela toda
-  ââââââââââââââââââââââââââââââââââââââââââ -->
+  <!-- ══════════════════════════════════════════
+       FLOWBOARD — fora do #content para ocupar tela toda
+  ══════════════════════════════════════════ -->
   <div class="page" id="page-flowboard" style="flex-direction:column;height:calc(100vh - 60px);overflow:hidden;">
     <div class="fb-topbar">
       <div class="fb-board-title" id="fb-board-title">Planos de Ação</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <button class="fb-filter-btn active" onclick="fbSetView('planos-acao',this)">ð Planos de Ação</button>
-        <button class="fb-filter-btn" onclick="fbSetView('denuncias',this)">ð¢ Denúncias</button>
-        <button class="fb-filter-btn" onclick="fbSetView('mapa-risco',this)">ðºï¸ Mapeamento de Risco</button>
+        <button class="fb-filter-btn active" onclick="fbSetView('planos-acao',this)">📋 Planos de Ação</button>
+        <button class="fb-filter-btn" onclick="fbSetView('denuncias',this)">📢 Denúncias</button>
+        <button class="fb-filter-btn" onclick="fbSetView('mapa-risco',this)">🗺️ Mapeamento de Risco</button>
       </div>
       <button class="btn btn-accent btn-sm" onclick="fbAddCard()">+ Card</button>
     </div>
@@ -1088,14 +1088,14 @@
 
 
 
-<!-- âââââââââââââââââââââââââââ
+<!-- ═══════════════════════════
      MODAIS
-âââââââââââââââââââââââââââ -->
+═══════════════════════════ -->
 
 <!-- MODAL: FILIAL -->
 <div class="modal-overlay" id="modal-filial">
   <div class="modal">
-    <h3>ð¢ Nova Filial / Setor</h3>
+    <h3>🏢 Nova Filial / Setor</h3>
     <div class="form-grid">
       <div class="field full"><label>Nome da Filial *</label><input type="text" id="f-filial-nome" placeholder="Ex: Filial Centro - SP"/></div>
       <div class="field"><label>CNPJ</label><input type="text" id="f-filial-cnpj" placeholder="00.000.000/0001-00"/></div>
@@ -1119,7 +1119,7 @@
 <!-- MODAL: RISCO -->
 <div class="modal-overlay" id="modal-risco">
   <div class="modal">
-    <h3>ðºï¸ Registrar Risco</h3>
+    <h3>🗺️ Registrar Risco</h3>
     <input type="hidden" id="f-risco-id"/>
     <div class="form-grid">
       <div class="field full"><label>Descrição do Risco *</label><input type="text" id="f-risco-desc" placeholder="Descreva o risco identificado"/></div>
@@ -1150,7 +1150,7 @@
 <!-- MODAL: CONTROLE -->
 <div class="modal-overlay" id="modal-controle">
   <div class="modal">
-    <h3>ð Novo Controle Interno</h3>
+    <h3>🔒 Novo Controle Interno</h3>
     <input type="hidden" id="f-ctrl-id"/>
     <div class="form-grid">
       <div class="field full"><label>Nome do Controle *</label><input type="text" id="f-ctrl-nome" placeholder="Ex: Revisão de acessos privilegiados"/></div>
@@ -1178,10 +1178,10 @@
   </div>
 </div>
 
-<!-- MODAL: PLANO DE AÃÃO -->
+<!-- MODAL: PLANO DE AÇÃO -->
 <div class="modal-overlay" id="modal-plano">
   <div class="modal">
-    <h3>ð Novo Plano de Ação</h3>
+    <h3>📋 Novo Plano de Ação</h3>
     <input type="hidden" id="f-plano-id"/>
     <div class="form-grid">
       <div class="field full"><label>Título do Plano / Ação *</label><input type="text" id="f-plano-titulo" placeholder="Ex: Implementar política de senhas"/></div>
@@ -1199,7 +1199,7 @@
       <div class="field"><label>Status</label><select id="f-plano-status">
         <option>Não Iniciado</option><option>Em Andamento</option><option>Concluído</option><option>Vencido</option>
       </select></div>
-      <div class="field full"><label>âï¸ Andamento do Plano</label><textarea id="f-plano-andamento" placeholder="Descreva como está o andamento do plano de ação, obstáculos, avanços recentes..." style="min-height:80px"></textarea></div>
+      <div class="field full"><label>✍️ Andamento do Plano</label><textarea id="f-plano-andamento" placeholder="Descreva como está o andamento do plano de ação, obstáculos, avanços recentes..." style="min-height:80px"></textarea></div>
       <div class="field"><label>Progresso (%)</label><input type="number" id="f-plano-prog" min="0" max="100" value="0"/></div>
       <div class="field full"><label>Descrição / Contexto</label><textarea id="f-plano-desc" placeholder="Detalhe as ações a serem executadas..."></textarea></div>
     </div>
@@ -1210,10 +1210,10 @@
   </div>
 </div>
 
-<!-- MODAL: DENÃNCIA -->
+<!-- MODAL: DENÚNCIA -->
 <div class="modal-overlay" id="modal-denuncia">
   <div class="modal" style="width:660px">
-    <h3>ð¢ Registrar Denúncia</h3>
+    <h3>📢 Registrar Denúncia</h3>
     <input type="hidden" id="f-dn-id"/>
     <div class="form-grid">
       <div class="field"><label>Data de Recebimento *</label><input type="date" id="f-dn-data"/></div>
@@ -1236,30 +1236,30 @@
 
       <!-- CAMPO DE PERIGO - destaque visual -->
       <div class="field full">
-        <label>ð¦ Nível de Perigo *</label>
+        <label>🚦 Nível de Perigo *</label>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px" id="perigo-selector">
           <label style="cursor:pointer">
             <input type="radio" name="f-dn-perigo" value="Leve" style="display:none"/>
             <div class="perigo-btn" data-val="Leve" style="text-align:center;padding:10px 8px;border-radius:8px;border:2px solid #d1fae5;background:#f0fdf9;transition:all .15s;font-size:.84rem;font-weight:700;color:#065f46">
-              ð¢ Leve
+              🟢 Leve
             </div>
           </label>
           <label style="cursor:pointer">
             <input type="radio" name="f-dn-perigo" value="Médio" style="display:none"/>
             <div class="perigo-btn" data-val="Médio" style="text-align:center;padding:10px 8px;border-radius:8px;border:2px solid #fef3c7;background:#fffbeb;transition:all .15s;font-size:.84rem;font-weight:700;color:#92400e">
-              ð¡ Médio
+              🟡 Médio
             </div>
           </label>
           <label style="cursor:pointer">
             <input type="radio" name="f-dn-perigo" value="Grave" style="display:none"/>
             <div class="perigo-btn" data-val="Grave" style="text-align:center;padding:10px 8px;border-radius:8px;border:2px solid #fee2e2;background:#fff1f1;transition:all .15s;font-size:.84rem;font-weight:700;color:#991b1b">
-              ð´ Grave
+              🔴 Grave
             </div>
           </label>
           <label style="cursor:pointer">
             <input type="radio" name="f-dn-perigo" value="Gravíssima" style="display:none"/>
             <div class="perigo-btn" data-val="Gravíssima" style="text-align:center;padding:10px 8px;border-radius:8px;border:2px solid #e9d5ff;background:#fdf4ff;transition:all .15s;font-size:.84rem;font-weight:700;color:#6b21a8">
-              â£ï¸ Gravíssima
+              ☣️ Gravíssima
             </div>
           </label>
         </div>
@@ -1282,7 +1282,7 @@
 <!-- MODAL: FLOWBOARD CARD -->
 <div class="modal-overlay" id="fb-card-modal">
   <div class="modal" style="width:680px">
-    <h3 id="fb-modal-title">ð Novo Card</h3>
+    <h3 id="fb-modal-title">📌 Novo Card</h3>
     <input type="hidden" id="fb-edit-id"/>
     <input type="hidden" id="fb-edit-col"/>
     <div class="fb-modal-cols">
@@ -1302,7 +1302,7 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-danger btn-sm" id="fb-del-btn" onclick="fbDeleteCard()" style="margin-right:auto;display:none">ð Excluir</button>
+      <button class="btn btn-danger btn-sm" id="fb-del-btn" onclick="fbDeleteCard()" style="margin-right:auto;display:none">🗑 Excluir</button>
       <button class="btn btn-outline" onclick="closeModal('fb-card-modal')">Cancelar</button>
       <button class="btn btn-accent" onclick="fbSaveCard()">Salvar Card</button>
     </div>
@@ -1312,7 +1312,7 @@
 
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- MODAL: DETALHE DENÃNCIA (relato completo) -->
+<!-- MODAL: DETALHE DENÚNCIA (relato completo) -->
 <div class="modal-overlay" id="modal-dn-detail">
   <div class="modal" style="width:720px;max-height:85vh">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
@@ -1332,7 +1332,7 @@
       </div>
     </div>
     <div id="dn-detail-identificado-wrap" style="display:none;margin-bottom:18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px">
-      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;letter-spacing:.5px;margin-bottom:8px">ð¤ Denunciante Identificado</div>
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;letter-spacing:.5px;margin-bottom:8px">👤 Denunciante Identificado</div>
       <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:.84rem">
         <div id="dn-detail-id-nome" style="display:none"><span style="color:var(--text-muted);font-size:.72rem;display:block;margin-bottom:1px">Nome</span><strong></strong></div>
         <div id="dn-detail-id-tel"  style="display:none"><span style="color:var(--text-muted);font-size:.72rem;display:block;margin-bottom:1px">Telefone</span><strong></strong></div>
@@ -1340,20 +1340,20 @@
       </div>
     </div>
     <div style="margin-bottom:14px">
-      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px">ð Relato Completo</div>
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px">📝 Relato Completo</div>
       <div id="dn-detail-relato" style="background:#f8fafc;border-radius:8px;padding:14px;font-size:.86rem;line-height:1.6;white-space:pre-wrap;max-height:240px;overflow-y:auto;border:1px solid var(--border)"></div>
     </div>
     <div id="dn-detail-acao-wrap" style="margin-bottom:14px;display:none">
-      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px">â¡ Ação Inicial</div>
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px">⚡ Ação Inicial</div>
       <div id="dn-detail-acao" style="background:#fffbeb;border-radius:8px;padding:12px;font-size:.85rem;line-height:1.5;white-space:pre-wrap;border:1px solid #fcd34d"></div>
     </div>
     <div id="dn-detail-obs-wrap" style="margin-bottom:14px;display:none">
-      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px">â Conclusão</div>
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px">✅ Conclusão</div>
       <div id="dn-detail-obs" style="background:#f0fdf9;border-radius:8px;padding:12px;font-size:.85rem;line-height:1.5;white-space:pre-wrap;border:1px solid #6ee7b7"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-dn-detail')">Fechar</button>
-      <button class="btn btn-accent btn-sm" id="dn-detail-edit-btn">âï¸ Editar Denúncia</button>
+      <button class="btn btn-accent btn-sm" id="dn-detail-edit-btn">✏️ Editar Denúncia</button>
     </div>
   </div>
 </div>
@@ -1361,7 +1361,7 @@
 <div class="modal-overlay" id="modal-admin">
   <div class="modal" style="width:560px">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-      <div style="width:42px;height:42px;border-radius:10px;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">âï¸</div>
+      <div style="width:42px;height:42px;border-radius:10px;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">⚙️</div>
       <div>
         <h3 style="margin-bottom:2px">Gerenciar Dados do Sistema</h3>
         <div style="font-size:.78rem;color:var(--text-muted)">Armazenamento local do navegador · Seus dados ficam salvos neste dispositivo</div>
@@ -1370,44 +1370,44 @@
 
     <!-- STATUS -->
     <div style="background:#f8fafc;border-radius:10px;border:1px solid var(--border);padding:16px;margin-bottom:20px">
-      <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:12px">ð Status do Armazenamento</div>
+      <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:12px">📊 Status do Armazenamento</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
         <div style="text-align:center;background:#fff;border-radius:8px;padding:10px;border:1px solid var(--border)">
-          <div style="font-size:1.3rem;font-weight:700;color:var(--primary)" id="admin-denuncias-count">â</div>
+          <div style="font-size:1.3rem;font-weight:700;color:var(--primary)" id="admin-denuncias-count">—</div>
           <div style="font-size:.7rem;color:var(--text-muted)">Denúncias</div>
         </div>
         <div style="text-align:center;background:#fff;border-radius:8px;padding:10px;border:1px solid var(--border)">
-          <div style="font-size:1.3rem;font-weight:700;color:var(--primary)" id="admin-filiais-count">â</div>
+          <div style="font-size:1.3rem;font-weight:700;color:var(--primary)" id="admin-filiais-count">—</div>
           <div style="font-size:.7rem;color:var(--text-muted)">Filiais</div>
         </div>
         <div style="text-align:center;background:#fff;border-radius:8px;padding:10px;border:1px solid var(--border)">
-          <div style="font-size:1.3rem;font-weight:700;color:var(--primary)" id="admin-controles-count">â</div>
+          <div style="font-size:1.3rem;font-weight:700;color:var(--primary)" id="admin-controles-count">—</div>
           <div style="font-size:.7rem;color:var(--text-muted)">Controles</div>
         </div>
         <div style="text-align:center;background:#fff;border-radius:8px;padding:10px;border:1px solid var(--border)">
-          <div style="font-size:1.3rem;font-weight:700;color:var(--primary)" id="admin-planos-count">â</div>
+          <div style="font-size:1.3rem;font-weight:700;color:var(--primary)" id="admin-planos-count">—</div>
           <div style="font-size:.7rem;color:var(--text-muted)">Planos</div>
         </div>
         <div style="text-align:center;background:#fff;border-radius:8px;padding:10px;border:1px solid var(--border)">
-          <div style="font-size:1.3rem;font-weight:700;color:var(--primary)" id="admin-riscos-count">â</div>
+          <div style="font-size:1.3rem;font-weight:700;color:var(--primary)" id="admin-riscos-count">—</div>
           <div style="font-size:.7rem;color:var(--text-muted)">Riscos</div>
         </div>
         <div style="text-align:center;background:#fff;border-radius:8px;padding:10px;border:1px solid var(--border)">
-          <div style="font-size:1.3rem;font-weight:700;color:var(--accent)" id="admin-size">â</div>
+          <div style="font-size:1.3rem;font-weight:700;color:var(--accent)" id="admin-size">—</div>
           <div style="font-size:.7rem;color:var(--text-muted)">Tamanho</div>
         </div>
       </div>
       <div style="font-size:.78rem;color:var(--text-muted);display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        ð Ãltimo save local: <strong id="admin-saved-at">â</strong>
+        🕐 Último save local: <strong id="admin-saved-at">—</strong>
       </div>
-      <div style="font-size:.78rem;font-weight:600" id="admin-sb-status">â³ Verificando conexão...</div>
+      <div style="font-size:.78rem;font-weight:600" id="admin-sb-status">⏳ Verificando conexão...</div>
     </div>
 
-    <!-- AÃÃES -->
+    <!-- AÇÕES -->
     <div style="display:flex;flex-direction:column;gap:10px">
 
       <button id="btn-admin-save" onclick="adminSaveNow()" class="btn btn-accent" style="justify-content:flex-start;gap:12px;padding:14px 18px">
-        <span style="font-size:1.2rem">ð¾</span>
+        <span style="font-size:1.2rem">💾</span>
         <div style="text-align:left">
           <div style="font-weight:700">Salvar Cache Local</div>
           <div style="font-size:.75rem;opacity:.8">Salva no navegador atual (backup instantâneo)</div>
@@ -1415,14 +1415,14 @@
       </button>
 
       <button onclick="adminPushToSupabase()" class="btn btn-accent" style="justify-content:flex-start;gap:12px;padding:14px 18px;margin-bottom:6px">
-        <span style="font-size:1.2rem">â¬ï¸</span>
+        <span style="font-size:1.2rem">⬆️</span>
         <div style="text-align:left">
           <div style="font-weight:700">Enviar Tudo para a Nuvem</div>
-          <div style="font-size:.75rem;opacity:.8">Sincroniza todos os dados locais â Supabase</div>
+          <div style="font-size:.75rem;opacity:.8">Sincroniza todos os dados locais → Supabase</div>
         </div>
       </button>
       <button onclick="adminSyncSupabase()" class="btn btn-primary" style="justify-content:flex-start;gap:12px;padding:14px 18px">
-        <span style="font-size:1.2rem">âï¸</span>
+        <span style="font-size:1.2rem">☁️</span>
         <div style="text-align:left">
           <div style="font-weight:700">Sincronizar com Nuvem</div>
           <div style="font-size:.75rem;opacity:.8">Busca dados atualizados do Supabase agora</div>
@@ -1430,7 +1430,7 @@
       </button>
 
       <button onclick="adminExportJSON()" class="btn btn-outline" style="justify-content:flex-start;gap:12px;padding:14px 18px">
-        <span style="font-size:1.2rem">ð¤</span>
+        <span style="font-size:1.2rem">📤</span>
         <div style="text-align:left">
           <div style="font-weight:700">Exportar Backup (.json)</div>
           <div style="font-size:.75rem;color:var(--text-muted)">Baixa todos os dados em arquivo para guardar ou transferir</div>
@@ -1439,7 +1439,7 @@
 
       <label style="cursor:pointer">
         <div class="btn btn-outline" style="justify-content:flex-start;gap:12px;padding:14px 18px;width:100%">
-          <span style="font-size:1.2rem">ð¥</span>
+          <span style="font-size:1.2rem">📥</span>
           <div style="text-align:left">
             <div style="font-weight:700">Importar Backup (.json)</div>
             <div style="font-size:.75rem;color:var(--text-muted)">Restaura dados de um arquivo de backup exportado anteriormente</div>
@@ -1450,7 +1450,7 @@
 
       <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
         <button onclick="adminReset()" class="btn" style="background:#fef2f2;color:var(--danger);border:1px solid #fca5a5;justify-content:flex-start;gap:12px;padding:14px 18px;width:100%">
-          <span style="font-size:1.2rem">ðï¸</span>
+          <span style="font-size:1.2rem">🗑️</span>
           <div style="text-align:left">
             <div style="font-weight:700">Resetar para Dados Originais</div>
             <div style="font-size:.75rem;color:#ef4444;opacity:.8">Apaga todas as edições e volta aos dados da planilha importada</div>
@@ -1459,7 +1459,7 @@
       </div>
 
       <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 14px;font-size:.8rem;color:#92400e;margin-top:2px">
-        â ï¸ <strong>Importante:</strong> Os dados são salvos <em>neste navegador</em> neste computador. Para usar em outro dispositivo, exporte o backup e importe no outro.
+        ⚠️ <strong>Importante:</strong> Os dados são salvos <em>neste navegador</em> neste computador. Para usar em outro dispositivo, exporte o backup e importe no outro.
       </div>
     </div>
 
@@ -1473,7 +1473,7 @@
 <!-- MODAL: RISCO -->
 <div class="modal-overlay" id="modal-rm-risco">
   <div class="modal" style="width:600px">
-    <h3 id="rm-modal-title">ð¯ Novo Risco</h3>
+    <h3 id="rm-modal-title">🎯 Novo Risco</h3>
     <div class="form-grid">
       <div class="field full"><label>Descrição do Risco *</label><textarea id="rm-f-desc" rows="2" placeholder="Descreva o risco..."></textarea></div>
       <div class="field"><label>Categoria</label><input type="text" id="rm-f-cat" placeholder="Ex: Fraude / Financeiro"/></div>
@@ -1481,8 +1481,8 @@
         <select id="rm-f-unidade"></select>
       </div>
       <div class="field full"><label>Dono do Risco / Setor</label><input type="text" id="rm-f-setor" placeholder="Ex: Frente de Caixa / Compliance"/></div>
-      <div class="field"><label>Probabilidade</label><select id="rm-f-prob"><option value="5">5 â Baixo</option><option value="10" selected>10 â Médio</option><option value="15">15 â Alto</option></select></div>
-      <div class="field"><label>Impacto</label><select id="rm-f-impacto"><option value="5">5 â Baixo</option><option value="10" selected>10 â Médio</option><option value="15">15 â Alto</option></select></div>
+      <div class="field"><label>Probabilidade</label><select id="rm-f-prob"><option value="5">5 — Baixo</option><option value="10" selected>10 — Médio</option><option value="15">15 — Alto</option></select></div>
+      <div class="field"><label>Impacto</label><select id="rm-f-impacto"><option value="5">5 — Baixo</option><option value="10" selected>10 — Médio</option><option value="15">15 — Alto</option></select></div>
       <div class="field full"><label>Controle Existente</label><input type="text" id="rm-f-controle" placeholder="Descreva os controles mitigadores"/></div>
       <div class="field full"><label>Observações</label><textarea id="rm-f-obs" rows="2" placeholder="Contexto adicional..."></textarea></div>
     </div>
@@ -1495,9 +1495,9 @@
 <!-- MODAL: PLANO -->
 <div class="modal-overlay" id="modal-rm-plano">
   <div class="modal" style="width:540px">
-    <h3>ð Plano de Ação</h3>
+    <h3>📋 Plano de Ação</h3>
     <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:9px 13px;margin-bottom:14px;font-size:.82rem;color:var(--text-muted)">
-      ð¯ Risco: <strong id="rm-modal-plano-risco" style="color:var(--primary)"></strong>
+      🎯 Risco: <strong id="rm-modal-plano-risco" style="color:var(--primary)"></strong>
     </div>
     <div class="form-grid">
       <div class="field full"><label>Título da Ação *</label><input type="text" id="rm-f-plano-titulo" placeholder="Descreva a ação..."/></div>
@@ -1521,7 +1521,7 @@
 <!-- MODAL: AGENDA -->
 <div class="modal-overlay" id="modal-agenda">
   <div class="modal" style="width:580px">
-    <h3 id="ag-modal-title">ð Novo Evento</h3>
+    <h3 id="ag-modal-title">📅 Novo Evento</h3>
     <div class="form-grid" style="grid-template-columns:1fr 1fr">
       <div class="field full">
         <label>Título *</label>
@@ -1586,37 +1586,37 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-agenda')">Cancelar</button>
-      <button class="btn btn-accent" onclick="agendaSalvarEvento()">ð¾ Salvar Evento</button>
+      <button class="btn btn-accent" onclick="agendaSalvarEvento()">💾 Salvar Evento</button>
     </div>
   </div>
 </div>
 
-<!-- MODAL: PERMISSÃES -->
+<!-- MODAL: PERMISSÕES -->
 <div class="modal-overlay" id="modal-permissoes">
   <div class="modal perm-modal">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div>
-        <h3 style="margin:0">ð Gerenciamento de Permissões</h3>
+        <h3 style="margin:0">🔐 Gerenciamento de Permissões</h3>
         <div style="font-size:.8rem;color:var(--text-muted);margin-top:4px">
           Defina quais módulos cada usuário pode acessar. Apenas você (Admin) pode alterar estas configurações.
         </div>
       </div>
-      <button onclick="closeModal('modal-permissoes')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted)">â</button>
+      <button onclick="closeModal('modal-permissoes')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted)">✕</button>
     </div>
 
     <!-- Admin info -->
     <div style="background:linear-gradient(135deg,#0f2d4a,#1e4976);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px">
       <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:.85rem">AD</div>
       <div>
-        <div style="color:#fff;font-weight:700">Administrador â admin@torre.com.br</div>
-        <div style="color:rgba(255,255,255,.7);font-size:.78rem">Acesso total · Crie usuários em ð¥ Gerenciar Usuários</div>
+        <div style="color:#fff;font-weight:700">Administrador — admin@torre.com.br</div>
+        <div style="color:rgba(255,255,255,.7);font-size:.78rem">Acesso total · Crie usuários em 👥 Gerenciar Usuários</div>
       </div>
       <span class="perm-badge admin" style="margin-left:auto">ADMIN</span>
     </div>
 
     <!-- Aviso módulos restritos -->
     <div style="background:#fdf4ff;border:1px solid #d8b4fe;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.8rem;color:#6b21a8">
-      ð <strong>Canal de Denúncia</strong> e <strong>Relatórios</strong> são módulos restritos â usuários precisam de permissão explícita para acessá-los.
+      🔒 <strong>Canal de Denúncia</strong> e <strong>Relatórios</strong> são módulos restritos — usuários precisam de permissão explícita para acessá-los.
     </div>
 
     <!-- Users list -->
@@ -1624,22 +1624,22 @@
 
     <div class="modal-footer" style="margin-top:20px">
       <button class="btn btn-outline" onclick="closeModal('modal-permissoes')">Fechar</button>
-      <button class="btn btn-accent" onclick="permSave();setSaveIndicator('â Permissões salvas na nuvem','var(--accent)')">ð¾ Salvar na Nuvem</button>
+      <button class="btn btn-accent" onclick="permSave();setSaveIndicator('✅ Permissões salvas na nuvem','var(--accent)')">💾 Salvar na Nuvem</button>
     </div>
   </div>
 </div>
 
-<!-- MODAL: GERENCIAR USUÃRIOS -->
+<!-- MODAL: GERENCIAR USUÁRIOS -->
 <div class="modal-overlay" id="modal-usuarios">
   <div class="modal" style="width:700px;max-width:95vw">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div>
-        <h3 style="margin:0">ð¥ Gerenciar Usuários</h3>
+        <h3 style="margin:0">👥 Gerenciar Usuários</h3>
         <div style="font-size:.78rem;color:var(--text-muted);margin-top:3px">Crie, edite e gerencie os acessos ao sistema</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="abrirNovoUsuario()" class="btn btn-accent btn-sm">+ Novo Usuário</button>
-        <button onclick="closeModal('modal-usuarios')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted)">â</button>
+        <button onclick="closeModal('modal-usuarios')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted)">✕</button>
       </div>
     </div>
     <div id="users-list"></div>
@@ -1649,10 +1649,10 @@
   </div>
 </div>
 
-<!-- MODAL: NOVO USUÃRIO -->
+<!-- MODAL: NOVO USUÁRIO -->
 <div class="modal-overlay" id="modal-novo-usuario">
   <div class="modal" style="width:680px;max-width:95vw">
-    <h3 style="margin-bottom:18px">â Novo Usuário</h3>
+    <h3 style="margin-bottom:18px">➕ Novo Usuário</h3>
     <div class="form-grid" style="grid-template-columns:1fr 1fr">
       <div class="field">
         <label>Nome completo *</label>
@@ -1675,22 +1675,22 @@
         <label>Perfil de acesso</label>
         <div class="perfil-selector">
           <div class="perfil-opt selected" data-perfil="Compliance" onclick="nuSelecionarPerfil('Compliance','#00c49a')">
-            <div style="font-size:1.3rem;margin-bottom:4px">ð¡ï¸</div>Compliance
+            <div style="font-size:1.3rem;margin-bottom:4px">🛡️</div>Compliance
           </div>
           <div class="perfil-opt" data-perfil="Auditoria" onclick="nuSelecionarPerfil('Auditoria','#3b82f6')">
-            <div style="font-size:1.3rem;margin-bottom:4px">ð</div>Auditoria
+            <div style="font-size:1.3rem;margin-bottom:4px">🔍</div>Auditoria
           </div>
           <div class="perfil-opt" data-perfil="RH" onclick="nuSelecionarPerfil('RH','#f59e0b')">
-            <div style="font-size:1.3rem;margin-bottom:4px">ð¥</div>RH
+            <div style="font-size:1.3rem;margin-bottom:4px">👥</div>RH
           </div>
           <div class="perfil-opt" data-perfil="Diretoria" onclick="nuSelecionarPerfil('Diretoria','#8b5cf6')">
-            <div style="font-size:1.3rem;margin-bottom:4px">ð</div>Diretoria
+            <div style="font-size:1.3rem;margin-bottom:4px">👔</div>Diretoria
           </div>
           <div class="perfil-opt" data-perfil="Operações" onclick="nuSelecionarPerfil('Operações','#ef4444')">
-            <div style="font-size:1.3rem;margin-bottom:4px">âï¸</div>Operações
+            <div style="font-size:1.3rem;margin-bottom:4px">⚙️</div>Operações
           </div>
           <div class="perfil-opt" data-perfil="Visualizador" onclick="nuSelecionarPerfil('Visualizador','#64748b')">
-            <div style="font-size:1.3rem;margin-bottom:4px">ðï¸</div>Visualizador
+            <div style="font-size:1.3rem;margin-bottom:4px">👁️</div>Visualizador
           </div>
                     <div class="perfil-opt" data-perfil="Admin" onclick="nuSelecionarPerfil('Admin','#7c3aed')">
                                   <div style="font-size:1.3rem;margin-bottom:4px">&#x1F451;</div>Admin
@@ -1721,7 +1721,7 @@
     <div id="nu-erro" style="color:var(--danger);font-size:.82rem;margin-top:8px;font-weight:600"></div>
     <div class="modal-footer" style="margin-top:16px">
       <button class="btn btn-outline" onclick="closeModal('modal-novo-usuario')">Cancelar</button>
-      <button class="btn btn-accent" onclick="salvarNovoUsuario()">â Criar Usuário</button>
+      <button class="btn btn-accent" onclick="salvarNovoUsuario()">✅ Criar Usuário</button>
     </div>
   </div>
 </div>
@@ -1729,7 +1729,7 @@
 <!-- MODAL: ALTERAR SENHA -->
 <div class="modal-overlay" id="modal-alterar-senha">
   <div class="modal" style="width:460px">
-    <h3 style="margin-bottom:6px">ð Alterar Senha</h3>
+    <h3 style="margin-bottom:6px">🔑 Alterar Senha</h3>
     <div id="ap-email-label" style="font-size:.83rem;color:var(--text-muted);margin-bottom:18px"></div>
     <input type="hidden" id="ap-email-hidden"/>
     <div class="form-grid" style="grid-template-columns:1fr">
@@ -1751,7 +1751,7 @@
     <div id="ap-erro" style="color:var(--danger);font-size:.82rem;margin-top:8px;font-weight:600"></div>
     <div class="modal-footer" style="margin-top:16px">
       <button class="btn btn-outline" onclick="closeModal('modal-alterar-senha')">Cancelar</button>
-      <button class="btn btn-accent" onclick="salvarNovaSenha()">ð Salvar Nova Senha</button>
+      <button class="btn btn-accent" onclick="salvarNovaSenha()">🔑 Salvar Nova Senha</button>
     </div>
   </div>
 </div>
@@ -1760,12 +1760,12 @@
 <div class="modal-overlay" id="modal-branding">
   <div class="modal" style="width:600px">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-      <div style="width:42px;height:42px;border-radius:10px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">ð¨</div>
+      <div style="width:42px;height:42px;border-radius:10px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">🎨</div>
       <div>
         <h3 style="margin-bottom:2px">Branding & Aparência</h3>
         <div style="font-size:.78rem;color:var(--text-muted)">Customize o nome, cores e logo da aplicação</div>
       </div>
-      <button onclick="closeModal('modal-branding')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);margin-left:auto">â</button>
+      <button onclick="closeModal('modal-branding')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted);margin-left:auto">✕</button>
     </div>
 
     <!-- Nome da Aplicação -->
@@ -1815,8 +1815,8 @@
 
     <!-- Botões -->
     <div style="display:flex;gap:10px;margin-top:24px">
-      <button onclick="salvarBranding()" class="btn btn-primary" style="flex:1">ð¾ Salvar Configurações</button>
-      <button onclick="resetarBranding()" class="btn btn-outline">ð Restaurar Padrão</button>
+      <button onclick="salvarBranding()" class="btn btn-primary" style="flex:1">💾 Salvar Configurações</button>
+      <button onclick="resetarBranding()" class="btn btn-outline">🔄 Restaurar Padrão</button>
       <button onclick="closeModal('modal-branding')" class="btn btn-outline">Cancelar</button>
     </div>
   </div>
@@ -1826,13 +1826,13 @@
   <div class="modal" style="width:820px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-shrink:0">
       <div>
-        <h3 style="margin:0">ð Logs de Auditoria</h3>
+        <h3 style="margin:0">📋 Logs de Auditoria</h3>
         <div style="font-size:.78rem;color:var(--text-muted);margin-top:3px">Histórico completo de ações dos usuários no sistema</div>
       </div>
       <div style="display:flex;gap:8px">
-        <button onclick="exportarLogs()" class="btn btn-outline btn-sm">â¬ï¸ Exportar CSV</button>
-        <button onclick="limparLogsAntigos()" class="btn btn-outline btn-sm" style="color:var(--warn)">ð Limpar antigos</button>
-        <button onclick="closeModal('modal-logs')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted)">â</button>
+        <button onclick="exportarLogs()" class="btn btn-outline btn-sm">⬇️ Exportar CSV</button>
+        <button onclick="limparLogsAntigos()" class="btn btn-outline btn-sm" style="color:var(--warn)">🗑 Limpar antigos</button>
+        <button onclick="closeModal('modal-logs')" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--text-muted)">✕</button>
       </div>
     </div>
 
@@ -1859,24 +1859,24 @@
     <!-- Filters -->
     <div style="flex-shrink:0;margin-bottom:12px">
       <div class="log-filter-bar">
-        <button class="log-filter-btn active" data-filtro="todos" onclick="renderLogs('todos')">ð Todos</button>
-        <button class="log-filter-btn" data-filtro="login" onclick="renderLogs('login')">ð Logins</button>
-        <button class="log-filter-btn" data-filtro="create" onclick="renderLogs('create')">â Criações</button>
-        <button class="log-filter-btn" data-filtro="update" onclick="renderLogs('update')">âï¸ Edições</button>
-        <button class="log-filter-btn" data-filtro="delete" onclick="renderLogs('delete')">ð Exclusões</button>
-        <button class="log-filter-btn" data-filtro="denuncias" onclick="renderLogs('denuncias')">ð¢ Denúncias</button>
-        <button class="log-filter-btn" data-filtro="import" onclick="renderLogs('import')">ð¥ Importações</button>
+        <button class="log-filter-btn active" data-filtro="todos" onclick="renderLogs('todos')">📋 Todos</button>
+        <button class="log-filter-btn" data-filtro="login" onclick="renderLogs('login')">🔐 Logins</button>
+        <button class="log-filter-btn" data-filtro="create" onclick="renderLogs('create')">➕ Criações</button>
+        <button class="log-filter-btn" data-filtro="update" onclick="renderLogs('update')">✏️ Edições</button>
+        <button class="log-filter-btn" data-filtro="delete" onclick="renderLogs('delete')">🗑 Exclusões</button>
+        <button class="log-filter-btn" data-filtro="denuncias" onclick="renderLogs('denuncias')">📢 Denúncias</button>
+        <button class="log-filter-btn" data-filtro="import" onclick="renderLogs('import')">📥 Importações</button>
       </div>
       <div style="display:flex;gap:8px">
-        <input type="text" placeholder="ð Filtrar por usuário..." oninput="logFiltrarUser(this.value)"
+        <input type="text" placeholder="🔍 Filtrar por usuário..." oninput="logFiltrarUser(this.value)"
           style="flex:1;padding:7px 12px;border:1px solid var(--border);border-radius:8px;font-size:.82rem;font-family:inherit"/>
-        <button onclick="logsLoad().then(()=>renderLogs(_logFiltroAtivo))" class="btn btn-outline btn-sm">ð Atualizar</button>
+        <button onclick="logsLoad().then(()=>renderLogs(_logFiltroAtivo))" class="btn btn-outline btn-sm">🔄 Atualizar</button>
       </div>
     </div>
 
     <!-- List -->
     <div id="logs-list" style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:10px;background:var(--card)">
-      <div class="log-empty"><div style="font-size:2rem">â³</div><div>Carregando logs...</div></div>
+      <div class="log-empty"><div style="font-size:2rem">⏳</div><div>Carregando logs...</div></div>
     </div>
   </div>
 </div>
