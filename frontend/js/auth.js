@@ -254,12 +254,35 @@ document.addEventListener('contextmenu', e => {
 });
 
 function checkSession() {
-  // AUTO-LOGIN: tela de login desativada — entra direto como admin
-  const autoUser = USUARIOS[0];
-  currentUser = autoUser;
-  _saveSession(autoUser);
-  enterApp(autoUser);
-  return true;
+  try {
+    // Try new session format first (ch_session_v2)
+    const s = _loadSession();
+    if(s) {
+      // Find user data from USUARIOS list
+      const u = USUARIOS.find(x => x.email === s.email);
+      if(u) {
+        currentUser = { ...u, perfil: s.perfil, nome: s.nome, avatar: s.avatar, cor: s.cor };
+        enterApp(currentUser);
+        return true;
+      }
+      // User from Edge Function response
+      currentUser = { email: s.email, perfil: s.perfil, nome: s.nome, avatar: s.avatar, cor: s.cor };
+      enterApp(currentUser);
+      return true;
+    }
+    // Fallback: old session key
+    const saved = sessionStorage.getItem('compliance_user');
+    if(saved) {
+      const user = JSON.parse(saved);
+      currentUser = user;
+      // Migrate to new format
+      _saveSession(user);
+      sessionStorage.removeItem('compliance_user');
+      enterApp(user);
+      return true;
+    }
+  } catch(e) { console.warn('checkSession:', e); }
+  return false;
 }
 
 function showAnonKeySetup() {
