@@ -11,7 +11,7 @@
 // Pegue em: supabase.com → seu projeto → Settings → API → "anon public"
 // Chave anon não é mais usada diretamente — todo acesso vai pelo Edge Function
 // Anon key — injetada pelo CI/CD via GitHub Secrets
-const SUPABASE_ANON = '%%SUPABASE_ANON_KEY%%';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFodGt1YXJsc2psbmZremZteHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDkwMTQsImV4cCI6MjA5MTE4NTAxNH0.5rw_iN9_-IYyNlqaOAXdy5wpmrOcvVO-QAUEQBgl3eA';
 
 // Ativo quando a anon key parece uma JWT válida (começa com eyJ)
 // Também verifica se há uma chave salva no localStorage
