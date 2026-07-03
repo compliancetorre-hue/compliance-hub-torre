@@ -1,5 +1,5 @@
 // ===== CONSTANTES GLOBAIS =====
-const SUPABASE_URL  = '%%SUPABASE_URL%%';
+const SUPABASE_URL  = 'https://qhtkuarlsjlnfkzfmxwa.supabase.co';
 const EDGE_URL = SUPABASE_URL + '/functions/v1/api';
 
 document.addEventListener('DOMContentLoaded',function(){
