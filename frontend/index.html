@@ -7,21 +7,6 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   
   <link rel="stylesheet" href="css/styles.css">
-  <script>
-  /* DIAGNOSTIC — remove after fix */
-  window.__loadErrors=[];
-  window.addEventListener('error',function(e){
-    var msg=(e.message||'Erro')+'  →  '+(e.filename||'').split('/').pop()+':'+e.lineno;
-    window.__loadErrors.push(msg);
-    var box=document.getElementById('_errbox');
-    if(!box&&document.body){box=document.createElement('div');box.id='_errbox';box.style.cssText='position:fixed;top:0;left:0;right:0;background:#7f1d1d;color:#fef2f2;padding:10px 14px;font:12px/1.6 monospace;z-index:999999;white-space:pre-wrap;max-height:240px;overflow:auto;';document.body.insertBefore(box,document.body.firstChild);}
-    if(box)box.innerHTML='<b>🔴 Erros JS (reporte ao suporte):</b>\n'+window.__loadErrors.join('\n');
-  },true);
-  window.addEventListener('unhandledrejection',function(e){
-    window.__loadErrors.push('Promise rejeitada: '+(e.reason&&e.reason.message||String(e.reason)));
-    var box=document.getElementById('_errbox');if(box)box.innerHTML='<b>🔴 Erros JS:</b>\n'+window.__loadErrors.join('\n');
-  });
-  </script>
 
   <style>
     /* LOGIN REDESIGN */
