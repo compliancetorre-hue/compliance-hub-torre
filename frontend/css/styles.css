@@ -103,12 +103,12 @@
 
     /* TOPBAR logout button */
     .btn-logout {
-      padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.15);
-      background: transparent; color: rgba(255,255,255,.7); font-size: .8rem;
+      padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted); font-size: .8rem;
       cursor: pointer; font-family: inherit; font-weight: 600;
       transition: all .15s; display: flex; align-items: center; gap: 5px;
     }
-    .btn-logout:hover { background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.3); }
+    .btn-logout:hover { background: #fef2f2; color: var(--danger); border-color: var(--danger); }
 
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
