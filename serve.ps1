@@ -1,4 +1,4 @@
-$root = 'C:\Users\bruno.magalhaes\Downloads\compliance-hub-v2-main\frontend'
+$root = Join-Path $PSScriptRoot 'frontend'
 $port = 3000
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add("http://localhost:$port/")
