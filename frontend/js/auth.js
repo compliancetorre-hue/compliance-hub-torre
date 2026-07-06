@@ -95,6 +95,7 @@ async function doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnTe
       // Login só é aceito se o servidor (Edge Function) confirmar as credenciais.
       // NUNCA entrar no app apenas com base na checagem local do hash.
       let tokenObtido = false;
+      let motivoFalha = 'Não foi possível validar sua sessão no servidor. Tente novamente.';
       try {
         showLoadingBar(true, 'Conectando ao servidor...');
         const r = await fetch(SUPABASE_URL + '/functions/v1/api/login', {
@@ -107,11 +108,14 @@ async function doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnTe
           const resp = await r.json();
           if(resp && resp.token) { setAppToken(resp.token); tokenObtido = true; }
         } else {
-          console.warn('[Login] Edge Function erro:', r.status, await r.text().catch(()=>''));
+          const errBody = await r.json().catch(() => null);
+          if(errBody && errBody.error) motivoFalha = errBody.error;
+          console.warn('[Login] Edge Function erro:', r.status, errBody);
         }
       } catch(e) {
         showLoadingBar(false);
         console.warn('[Login] Edge Function indisponível:', e.message);
+        motivoFalha = 'Servidor indisponível no momento. Tente novamente em instantes.';
       }
 
       if(!tokenObtido) {
@@ -121,7 +125,7 @@ async function doLoginAsync(email, senha, emailEl, passEl, errorEl, btnEl, btnTe
         btnText.textContent = 'Entrar no Sistema';
         emailEl.classList.add('error');
         passEl.classList.add('error');
-        errorEl.innerHTML = '❌ Não foi possível validar sua sessão no servidor. Tente novamente.';
+        errorEl.innerHTML = '❌ ' + escapeHtml(motivoFalha);
         return;
       }
     }
