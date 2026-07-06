@@ -152,7 +152,7 @@ function enterApp(user) {
   auditLog('login', 'sistema', `Login realizado`, {perfil: user.perfil});
 
   // Mostrar/ocultar botões admin
-  const adminBtns = ['nav-permissoes','nav-usuarios','nav-audit','nav-branding'];
+  const adminBtns = ['nav-permissoes','nav-usuarios','nav-audit','nav-branding','nav-edit-mode'];
   adminBtns.forEach(id => {
     const el = document.getElementById(id);
     if(el) el.style.display = (user.email === ADMIN_EMAIL || user.perfil === 'Admin') ? 'flex' : 'none';
