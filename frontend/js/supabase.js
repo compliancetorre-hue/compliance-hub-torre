@@ -130,6 +130,7 @@ async function loadFromSupabase() {
     if(allData.rmPlanos?.length > 0) DB.rmPlanos = allData.rmPlanos.map(p=>({id:p.id,riscoId:p.risco_id,titulo:p.titulo,resp:p.resp||'',prazo:p.prazo||'',tipo:p.tipo||'Preventiva',status:p.status||'Não Iniciado',prog:p.prog||0,andamento:p.andamento||''}));
     if(allData.agenda?.length > 0) DB.agenda = allData.agenda.map(e=>({id:e.id,titulo:e.titulo,tipo:e.tipo||'Outro',data:e.data,hora:e.hora||'',horaFim:e.hora_fim||'',local:e.local||'',resp:e.resp||'',desc:e.descricao||'',lembrete:e.lembrete||'',recorrencia:e.recorrencia||'nenhuma'}));
     if(allData.settings?.length > 0) { const units = allData.settings.find(s=>s.key==='rm_units'); if(units?.value) { try { const su=JSON.parse(units.value); if(Array.isArray(su)) su.forEach(u=>{ if(u.id&&!RM_UNITS.some(x=>x.id===u.id)) RM_UNITS.push(u); }); } catch(e){} } }
+    if(allData.settings?.length > 0) { const textos = allData.settings.find(s=>s.key==='ui_text_overrides'); if(textos?.value) { try { uiOverrides = JSON.parse(textos.value) || {}; aplicarUiOverrides(); } catch(e){} } }
 
     // ── FILIAIS: Supabase é a fonte de verdade se tiver dados, senão mantém built-in
     if(filiais.length > 0) {
