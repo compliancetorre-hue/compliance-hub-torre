@@ -1091,3 +1091,86 @@ function adminReset() {
   clearLocalCache();
   location.reload();
 }
+
+// ════════════════════════════════════════════════════
+// MODO DE EDIÇÃO — editar textos da interface (menus, títulos, KPIs)
+// Somente admin. Os textos ficam em settings.ui_text_overrides e
+// valem para todo mundo que acessa o sistema (carregados em loadFromSupabase).
+// ════════════════════════════════════════════════════
+const UI_OVERRIDES_KEY = 'ui_text_overrides';
+let uiOverrides = {};
+let editModeAtivo = false;
+let _editModeSnapshot = null;
+
+function aplicarUiOverrides() {
+  document.querySelectorAll('[data-editable]').forEach(el => {
+    const key = el.getAttribute('data-editable');
+    if(uiOverrides[key] !== undefined) el.textContent = uiOverrides[key];
+  });
+}
+
+function toggleEditMode() {
+  if(editModeAtivo) sairModoEdicao(true);
+  else entrarModoEdicao();
+}
+
+function entrarModoEdicao() {
+  editModeAtivo = true;
+  _editModeSnapshot = new Map();
+  document.querySelectorAll('[data-editable]').forEach(el => {
+    _editModeSnapshot.set(el, el.textContent);
+    el.contentEditable = 'true';
+    el.classList.add('edit-mode-target');
+  });
+  document.body.classList.add('edit-mode-active');
+  const label = document.getElementById('nav-edit-mode-label');
+  if(label) label.textContent = 'Editando…';
+  mostrarBarraEdicao();
+}
+
+function mostrarBarraEdicao() {
+  let bar = document.getElementById('edit-mode-bar');
+  if(bar) { bar.style.display = 'flex'; return; }
+  bar = document.createElement('div');
+  bar.id = 'edit-mode-bar';
+  bar.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:9999;background:var(--primary);color:#fff;padding:12px 20px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.3);display:flex;align-items:center;gap:14px;font-size:.85rem;font-weight:600';
+  bar.innerHTML =
+    '<span>✏️ Modo de edição — clique em qualquer texto destacado pra editar</span>' +
+    '<button onclick="salvarModoEdicao()" style="background:var(--accent);color:#0f2d4a;border:none;padding:7px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit">💾 Salvar</button>' +
+    '<button onclick="sairModoEdicao(true)" style="background:rgba(255,255,255,.15);color:#fff;border:none;padding:7px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit">Cancelar</button>';
+  document.body.appendChild(bar);
+}
+
+function sairModoEdicao(reverter) {
+  editModeAtivo = false;
+  document.querySelectorAll('[data-editable]').forEach(el => {
+    el.contentEditable = 'false';
+    el.classList.remove('edit-mode-target');
+    if(reverter && _editModeSnapshot && _editModeSnapshot.has(el)) {
+      el.textContent = _editModeSnapshot.get(el);
+    }
+  });
+  _editModeSnapshot = null;
+  document.body.classList.remove('edit-mode-active');
+  const bar = document.getElementById('edit-mode-bar');
+  if(bar) bar.style.display = 'none';
+  const label = document.getElementById('nav-edit-mode-label');
+  if(label) label.textContent = 'Modo Edição';
+}
+
+async function salvarModoEdicao() {
+  document.querySelectorAll('[data-editable]').forEach(el => {
+    const key = el.getAttribute('data-editable');
+    uiOverrides[key] = el.textContent.trim();
+  });
+  setSaveIndicator('⏳ Salvando textos...', 'var(--warn)');
+  try {
+    await sbUpsert('settings', { key: UI_OVERRIDES_KEY, value: JSON.stringify(uiOverrides) });
+    setSaveIndicator('☁️ Textos salvos para todos', 'var(--accent)');
+    auditLog('update', 'sistema', 'Textos da interface editados (modo edição)');
+  } catch(e) {
+    setSaveIndicator('❌ Erro ao salvar textos', 'var(--danger)');
+    alert('❌ Erro ao salvar: ' + e.message);
+  }
+  sairModoEdicao(false);
+}
