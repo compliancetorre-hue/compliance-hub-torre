@@ -797,3 +797,16 @@
 }
 
 
+
+/* ── MODO DE EDIÇÃO — textos editáveis (menus, KPIs, títulos) ── */
+.edit-mode-active [data-editable] {
+  outline: 1.5px dashed rgba(0,196,154,.55);
+  outline-offset: 2px;
+  border-radius: 4px;
+  cursor: text;
+}
+.edit-mode-active [data-editable]:hover,
+.edit-mode-active [data-editable]:focus {
+  outline: 1.5px solid var(--accent);
+  background: rgba(0,196,154,.08);
+}
