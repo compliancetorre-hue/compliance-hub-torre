@@ -32,16 +32,21 @@ function _efH() {
 
 // ── API helpers — todas as chamadas passam OBRIGATORIAMENTE pela Edge Function.
 // Sem token de app, a chamada falha (fail-closed) em vez de cair para a REST direta.
-async function sbGet(table, params='') {
-  const qs = params ? '&' + params : '';
+
+// Helper de baixo nível — "path" já inclui a query string completa (ex: "riscos?order=id")
+async function _edgeGet(path) {
   const token = getAppToken();
-  if(!token) throw new Error(`${table}: sessão inválida (sem token de servidor)`);
-  const r = await fetch(`${EDGE_URL}/data/${table}?order=id${qs}`, { headers: _efH() });
+  if(!token) throw new Error(`${path}: sessão inválida (sem token de servidor)`);
+  const r = await fetch(`${EDGE_URL}/data/${path}`, { headers: _efH() });
   if(!r.ok) {
     const txt = await r.text().catch(()=>'');
-    throw new Error(`${table}: HTTP ${r.status} ${txt.slice(0,100)}`);
+    throw new Error(`${path}: HTTP ${r.status} ${txt.slice(0,100)}`);
   }
   return r.json();
+}
+async function sbGet(table, params='') {
+  const qs = params ? '&' + params : '';
+  return _edgeGet(`${table}?order=id${qs}`);
 }
 async function sbInsert(table, body) { return sbUpsert(table, body); }
 async function sbUpdate(table, id, body) { return sbUpsert(table, { id, ...body }); }
@@ -98,21 +103,26 @@ async function loadFromSupabase() {
   try {
     showLoadingBar(true, 'Conectando ao Supabase...');
 
-    // Uma única chamada carrega tudo — sempre via Edge Function (fail-closed,
-    // sem fallback de REST direto com a anon key: ver nota de segurança acima).
+    // A Edge Function não expõe um endpoint de carga em lote — carregamos
+    // cada tabela em paralelo pela mesma rota segura usada por sbGet/sbUpsert.
     const allData = await (async () => {
       const token = getAppToken();
       if(!token) throw new Error('sessão inválida (sem token de servidor)');
-      const r = await fetch(`${EDGE_URL}/load-all`, { headers: _efH() });
-      if(!r.ok) {
-        const txt = await r.text().catch(()=>'');
-        throw new Error(`load-all: HTTP ${r.status} ${txt.slice(0,100)}`);
-      }
-      const d = await r.json();
+      const [filiaisR, riscosR, controlesR, planosR, denunciasR, fbR, agendaR, rmR, settingsR] = await Promise.all([
+        _edgeGet('filiais?order=id'),
+        _edgeGet('riscos?order=id'),
+        _edgeGet('controles?order=id'),
+        _edgeGet('planos?order=id'),
+        _edgeGet('denuncias?order=id'),
+        _edgeGet('fbboards?id=eq.main'),
+        _edgeGet('agenda?order=data'),
+        _edgeGet('rm_planos?order=id'),
+        _edgeGet('settings?select=*')
+      ]);
       return {
-        filiais: d.filiais||[], riscos: d.riscos||[], controles: d.controles||[],
-        planos: d.planos||[], denRows: d.denuncias||[], fbRows: d.fbboards||[],
-        rmPlanos: d.rmPlanos||[], agenda: d.agenda||[], settings: d.settings||[]
+        filiais: filiaisR||[], riscos: riscosR||[], controles: controlesR||[],
+        planos: planosR||[], denRows: denunciasR||[], fbRows: fbR||[],
+        rmPlanos: rmR||[], agenda: agendaR||[], settings: settingsR||[]
       };
     })();
     const { filiais, riscos, controles, planos, denRows, fbRows } = allData;
