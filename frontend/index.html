@@ -138,52 +138,52 @@
       </svg>
     </div>
     <div>
-      <div class="brand">Compliance Hub</div>
-      <div class="sub">Gestão & Controle</div>
+      <div class="brand" data-editable="brand-nome">Compliance Hub</div>
+      <div class="sub" data-editable="brand-sub">Gestão & Controle</div>
     </div>
   </div>
   <nav>
-    <div class="nav-label">Visão Geral</div>
+    <div class="nav-label" data-editable="secao:visao-geral">Visão Geral</div>
     <a onclick="goto('dashboard',this)" class="active" data-page="dashboard">
-      <span class="icon">📊</span> Dashboard
+      <span class="icon">📊</span> <span data-editable="menu:dashboard">Dashboard</span>
     </a>
     <a onclick="goto('agenda',this)" data-page="agenda">
-      <span class="icon">📅</span> Agenda
+      <span class="icon">📅</span> <span data-editable="menu:agenda">Agenda</span>
     </a>
 
-    <div class="nav-label">Estrutura</div>
+    <div class="nav-label" data-editable="secao:estrutura">Estrutura</div>
     <a onclick="goto('filiais',this)" data-page="filiais">
-      <span class="icon">🏢</span> Filiais e Setores
+      <span class="icon">🏢</span> <span data-editable="menu:filiais">Filiais e Setores</span>
     </a>
 
-    <div class="nav-label">Compliance</div>
+    <div class="nav-label" data-editable="secao:compliance">Compliance</div>
     <a onclick="goto('mapa-risco',this)" data-page="mapa-risco">
-      <span class="icon">🗺️</span> Mapeamento de Risco
+      <span class="icon">🗺️</span> <span data-editable="menu:mapa-risco">Mapeamento de Risco</span>
     </a>
 
-    <div class="nav-label">Denúncias</div>
+    <div class="nav-label" data-editable="secao:denuncias">Denúncias</div>
     <a onclick="goto('canal-denuncia',this)" data-page="canal-denuncia">
-      <span class="icon">📢</span> Canal de Denúncia
+      <span class="icon">📢</span> <span data-editable="menu:canal-denuncia">Canal de Denúncia</span>
     </a>
 
-    <div class="nav-label">Análise</div>
+    <div class="nav-label" data-editable="secao:analise">Análise</div>
     <a onclick="goto('relatorios',this)" data-page="relatorios">
-      <span class="icon">📑</span> Relatórios
+      <span class="icon">📑</span> <span data-editable="menu:relatorios">Relatórios</span>
     </a>
     <a onclick="goto('importar',this)" data-page="importar">
-      <span class="icon">⬆️</span> Importar Planilha
+      <span class="icon">⬆️</span> <span data-editable="menu:importar">Importar Planilha</span>
     </a>
 
-    <div class="nav-label">Fluxo Visual</div>
+    <div class="nav-label" data-editable="secao:fluxo-visual">Fluxo Visual</div>
     <a onclick="goto('flowboard',this)" data-page="flowboard">
-      <span class="icon">🗂️</span> Flow Board
+      <span class="icon">🗂️</span> <span data-editable="menu:flowboard">Flow Board</span>
     </a>
-    <div class="nav-label">Pesquisa</div>
+    <div class="nav-label" data-editable="secao:pesquisa">Pesquisa</div>
     <a onclick="goto('due-diligence',this)" data-page="due-diligence">
-      <span class="icon">🔍</span> Due Diligence
+      <span class="icon">🔍</span> <span data-editable="menu:due-diligence">Due Diligence</span>
     </a>
         <a onclick="goto('due-diligence2',this)" data-page="due-diligence2">
-                <span class="icon">🔎</span> Due Diligence 2
+                <span class="icon">🔎</span> <span data-editable="menu:due-diligence2">Due Diligence 2</span>
         </a>
   </nav>
   <div style="padding:8px 12px 4px;border-top:1px solid rgba(255,255,255,.08);margin-top:4px">
@@ -192,22 +192,27 @@
       <button id="nav-permissoes" onclick="abrirGerenciarPermissoes()" title="Permissões de Acesso"
         style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);color:rgba(196,168,255,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(139,92,246,.3)'" onmouseout="this.style.background='rgba(139,92,246,.15)'">
-        <span style="font-size:.95rem">🔐</span>Permissões
+        <span style="font-size:.95rem">🔐</span><span data-editable="botao:permissoes">Permissões</span>
       </button>
       <button id="nav-usuarios" onclick="abrirGerenciarUsuarios()" title="Gerenciar Usuários"
         style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.28);color:rgba(110,231,183,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(16,185,129,.25)'" onmouseout="this.style.background='rgba(16,185,129,.12)'">
-        <span style="font-size:.95rem">👥</span>Usuários
+        <span style="font-size:.95rem">👥</span><span data-editable="botao:usuarios">Usuários</span>
       </button>
       <button id="nav-audit" onclick="abrirLogs()" title="Logs de Auditoria"
         style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.28);color:rgba(252,165,165,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(239,68,68,.22)'" onmouseout="this.style.background='rgba(239,68,68,.12)'">
-        <span style="font-size:.95rem">📋</span>Logs
+        <span style="font-size:.95rem">📋</span><span data-editable="botao:logs">Logs</span>
       </button>
       <button id="nav-branding" onclick="abrirPainelBranding()" title="Branding & Aparência"
         style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.28);color:rgba(147,197,253,.9);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(59,130,246,.25)'" onmouseout="this.style.background='rgba(59,130,246,.12)'">
-        <span style="font-size:.95rem">🎨</span>Branding
+        <span style="font-size:.95rem">🎨</span><span data-editable="botao:branding">Branding</span>
+      </button>
+      <button id="nav-edit-mode" onclick="toggleEditMode()" title="Ativar/desativar modo de edição de textos"
+        style="display:none;grid-column:span 2;flex-direction:row;align-items:center;justify-content:center;gap:6px;padding:7px 4px;border-radius:7px;background:rgba(250,204,21,.12);border:1px solid rgba(250,204,21,.3);color:rgba(253,224,71,.9);font-size:.68rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
+        onmouseover="this.style.background='rgba(250,204,21,.25)'" onmouseout="this.style.background='rgba(250,204,21,.12)'">
+        <span style="font-size:.95rem">✏️</span><span id="nav-edit-mode-label">Modo Edição</span>
       </button>
     </div>
     <!-- Linha inferior — visível para todos -->
@@ -215,17 +220,17 @@
       <button onclick="openAdminPanel()" title="Gerenciar Dados"
         style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.65);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(255,255,255,.14)'" onmouseout="this.style.background='rgba(255,255,255,.07)'">
-        <span style="font-size:.95rem">⚙️</span>Dados
+        <span style="font-size:.95rem">⚙️</span><span data-editable="botao:dados">Dados</span>
       </button>
       <button id="nav-minha-senha" onclick="abrirAlterarMinhaSenha()" title="Alterar Minha Senha"
         style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(255,255,255,.12)'" onmouseout="this.style.background='rgba(255,255,255,.05)'">
-        <span style="font-size:.95rem">🔑</span>Senha
+        <span style="font-size:.95rem">🔑</span><span data-editable="botao:senha">Senha</span>
       </button>
       <button onclick="forceResetCache()" title="Recarregar Dados"
         style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:7px;background:rgba(255,140,50,.12);border:1px solid rgba(255,140,50,.25);color:rgba(255,180,120,.85);font-size:.62rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;line-height:1.2"
         onmouseover="this.style.background='rgba(255,140,50,.22)'" onmouseout="this.style.background='rgba(255,140,50,.12)'">
-        <span style="font-size:.95rem">🔄</span>Recarregar
+        <span style="font-size:.95rem">🔄</span><span data-editable="botao:recarregar">Recarregar</span>
       </button>
     </div>
   </div>
@@ -305,28 +310,28 @@
           <div class="stat-icon" style="background:rgba(0,196,154,.2)">🛡️</div>
           <div>
             <div class="stat-num" id="dash-total-controles">0</div>
-            <div class="stat-label">Controles Monitorados</div>
+            <div class="stat-label" data-editable="kpi:controles">Controles Monitorados</div>
           </div>
         </div>
         <div class="stat-card kpi-card-clickable" onclick="openDashDrill('riscos')" title="Ver riscos Altos e Críticos">
           <div class="stat-icon amber">⚠️</div>
           <div>
             <div class="stat-num" id="dash-riscos-altos" style="color:var(--warn)">0</div>
-            <div class="stat-label">Planos de Ação</div>
+            <div class="stat-label" data-editable="kpi:planos-acao">Planos de Ação</div>
           </div>
         </div>
         <div class="stat-card kpi-card-clickable" onclick="openDashDrill('acoes')" title="Ver ações e planos vencidos">
           <div class="stat-icon red">🚨</div>
           <div>
             <div class="stat-num" id="dash-acoes-venc" style="color:var(--danger)">0</div>
-            <div class="stat-label">Ações Vencidas</div>
+            <div class="stat-label" data-editable="kpi:acoes-vencidas">Ações Vencidas</div>
           </div>
         </div>
         <div class="stat-card kpi-card-clickable" onclick="openDashDrill('denuncias')" title="Ver denúncias Abertas e Em Análise">
           <div class="stat-icon blue">📢</div>
           <div>
             <div class="stat-num" id="dash-denuncias" style="color:var(--info)">0</div>
-            <div class="stat-label">Denúncias em Aberto</div>
+            <div class="stat-label" data-editable="kpi:denuncias-abertas">Denúncias em Aberto</div>
             <div id="dash-denuncias-sub" style="font-size:.68rem;color:var(--text-muted);margin-top:1px"></div>
           </div>
         </div>
@@ -352,19 +357,19 @@
 
       <div class="chart-grid">
         <div class="chart-box">
-          <h3>📈 Riscos por Nível</h3>
+          <h3 data-editable="titulo:riscos-por-nivel">📈 Riscos por Nível</h3>
           <div class="bar-chart" id="chart-riscos"></div>
         </div>
         <div class="chart-box">
-          <h3>📋 Status dos Planos de Ação</h3>
+          <h3 data-editable="titulo:status-planos">📋 Status dos Planos de Ação</h3>
           <div class="bar-chart" id="chart-controles"></div>
         </div>
         <div class="chart-box">
-          <h3>📋 Planos de Ação por Status</h3>
+          <h3 data-editable="titulo:planos-por-status">📋 Planos de Ação por Status</h3>
           <div class="bar-chart" id="chart-planos"></div>
         </div>
         <div class="chart-box">
-          <h3>📢 Denúncias por Nível de Perigo</h3>
+          <h3 data-editable="titulo:denuncias-por-perigo">📢 Denúncias por Nível de Perigo</h3>
           <div class="bar-chart" id="chart-denuncias"></div>
         </div>
       </div>
