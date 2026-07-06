@@ -262,11 +262,6 @@ document.head.appendChild(shakeStyle);
   }, 1000);
 })();
 
-// ── Disable right-click context menu on sensitive areas
-document.addEventListener('contextmenu', e => {
-  if(e.target.closest('.section, .modal, .page')) e.preventDefault();
-});
-
 function checkSession() {
   try {
     // Se usamos Supabase, a sessão só é válida com um token de servidor presente
