@@ -211,38 +211,21 @@ function dd2HTML(){return `
 // DUE DILIGENCE 2 — JAVASCRIPT
 // ═══════════════════════════════════════════════════════
 
-// DD2_API removido — chamadas migradas para APIs públicas diretas
-const DD2_DATAJUD_KEY = 'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==';
-
-// A chave da API do Portal da Transparência é PESSOAL e NUNCA deve existir no
+// A chave da API do DataJud CNJ é pública (divulgada pelo próprio CNJ para
+// qualquer desenvolvedor), mas a chamada direta do navegador é bloqueada por
+// CORS pela api-publica.datajud.cnj.jus.br. Por isso passa pela Edge Function
+// também — mesmo caminho da chave pessoal do Portal da Transparência.
+//
+// A chave do Portal da Transparência é PESSOAL e NUNCA deve existir no
 // cliente (ficaria visível a qualquer visitante via "Ver código-fonte"). As
-// consultas passam pela Edge Function, que guarda a chave como secret do lado
-// do servidor — ver rota /portal/:endpoint documentada junto ao backend.
+// consultas passam pela Edge Function, que guarda as chaves como secrets do
+// lado do servidor — ver rotas /portal/:endpoint e /datajud/search no backend.
 function dd2PortalHeaders(){
   return { 'x-app-token': (typeof getAppToken==='function'?getAppToken():'') };
 }
 function dd2PortalUrl(rota, params){
   return `${EDGE_URL}/portal/${rota}?${params}`;
 }
-const DD2_TRIBUNAIS = [
-  {sigla:'TJSP',nome:'TJSP'},
-  {sigla:'TJRJ',nome:'TJRJ'},
-  {sigla:'TJMG',nome:'TJMG'},
-  {sigla:'TJRS',nome:'TJRS'},
-  {sigla:'TJPR',nome:'TJPR'},
-  {sigla:'TJSC',nome:'TJSC'},
-  {sigla:'TJBA',nome:'TJBA'},
-  {sigla:'TJGO',nome:'TJGO'},
-  {sigla:'TJPE',nome:'TJPE'},
-  {sigla:'TJCE',nome:'TJCE'},
-  {sigla:'TJAM',nome:'TJAM'},
-  {sigla:'TJMT',nome:'TJMT'},
-  {sigla:'TJMS',nome:'TJMS'},
-  {sigla:'TJPA',nome:'TJPA'},
-  {sigla:'TJDF',nome:'TJDF'},
-  {sigla:'TST',nome:'TST'},
-  {sigla:'STJ',nome:'STJ'}
-];
 
 let dd2JudicialData = [];
 let dd2CadastralData = null;
@@ -306,7 +289,7 @@ async function dd2Iniciar(){
     console.warn('DD2: failsafe acionado');
     document.getElementById('dd2-progress').style.display='none';
     document.getElementById('dd2-report').style.display='block';
-  },30000);
+  },35000);
 
   try {
   if(scCad&&tipo==='cnpj'){
@@ -438,23 +421,14 @@ async function dd2BuscarCNPJ(doc){
   return norm;
 }
 
-async function dd2FetchJudicial(doc,headers){
-  const results=[];
-  const calls=DD2_TRIBUNAIS.map(t=>
-    fetch('https://api-publica.datajud.cnj.jus.br/api_publica_'+t.sigla.toLowerCase()+'/_search',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'APIKey '+DD2_DATAJUD_KEY},
-      body:JSON.stringify({query:{bool:{should:[{match:{numeroProcesso:doc}},{match:{cpfCnpj:doc}}]}},size:50}),
-      signal:AbortSignal.timeout(15000)
-    }).then(r=>r.ok?r.json():null).then(d=>{
-      if(d?.hits?.hits?.length){
-        d.hits.hits.forEach(h=>{const s=h._source||{};results.push({...s,_tribunal:t.sigla});});
-      }
-    }).catch(()=>{})
-  );
-  await Promise.allSettled(calls);
-  dd2JudicialData=results;
-  dd2RenderJudicial(results);
+// Busca processos no DataJud CNJ (17 tribunais) via Edge Function —
+// evitamos a chamada direta do navegador, bloqueada por CORS pelo CNJ.
+async function dd2FetchJudicial(doc){
+  const r=await fetch(`${EDGE_URL}/datajud/search?codigo=${doc}`,{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(25000)});
+  if(!r.ok) throw new Error('Falha ao consultar DataJud CNJ');
+  const d=await r.json();
+  dd2JudicialData=Array.isArray(d)?d:[];
+  dd2RenderJudicial(dd2JudicialData);
 }
 
 async function dd2FetchPep(nome,cpf){
@@ -468,13 +442,22 @@ async function dd2FetchPep(nome,cpf){
 }
 
 // Consulta se o CPF/NIS recebeu parcelas do Bolsa Família (Portal da Transparência).
+// A API exige um mês de referência (AAAAMM) — consultamos os últimos 3 meses fechados.
 async function dd2FetchBolsaFamilia(cpf){
-  const r=await fetch(dd2PortalUrl('bolsa-familia','codigo='+cpf+'&pagina=1'),{
-    headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)
+  const hoje=new Date();
+  const meses=[1,2,3].map(i=>{
+    const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);
+    return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0');
   });
-  if(!r.ok) throw new Error('Falha ao consultar Bolsa Família');
-  const d=await r.json();
-  return Array.isArray(d)?d:[];
+  const respostas=await Promise.all(meses.map(async anoMes=>{
+    const r=await fetch(dd2PortalUrl('bolsa-familia','codigo='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'),{
+      headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)
+    });
+    if(!r.ok) throw new Error('Falha ao consultar Bolsa Família ('+anoMes+')');
+    const d=await r.json();
+    return Array.isArray(d)?d:[];
+  }));
+  return respostas.flat();
 }
 
 function dd2RenderCadastral(d){
@@ -562,10 +545,18 @@ function dd2RenderPep(data){
   <tbody>${data.slice(0,50).map(p=>`<tr><td>${escapeHtml(p.nome)||'—'}</td><td>${escapeHtml(p.descricao_funcao)||'—'}</td><td>${escapeHtml(p.nome_orgao)||'—'}</td><td>${escapeHtml(p.dt_inicio_exercicio)||'—'} – ${escapeHtml(p.dt_fim_exercicio)||'atual'}</td><td><span class="dd2-badge pep">&#9888; PEP</span></td></tr>`).join('')}</tbody></table></div>`;
 }
 
+const DD2_BOLSA_MANUAL_URL='https://portaldatransparencia.gov.br/beneficios/novo-bolsa-familia';
+function dd2LinkManualBolsa(){
+  return `<div class="dd2-links-ext"><a href="${DD2_BOLSA_MANUAL_URL}" target="_blank" class="dd2-link-ext">🔗 Consultar manualmente no Portal da Transparência</a></div>`;
+}
+
 function dd2RenderBolsaFamilia(data){
   const el=document.getElementById('dd2-bolsa-content');
-  if(!Array.isArray(data)){el.innerHTML='<p style="color:#ef4444">Não foi possível consultar o Bolsa Família no momento.</p>';return;}
-  if(!data.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhuma parcela de Bolsa Família encontrada para este CPF.</p>';return;}
+  if(!Array.isArray(data)){
+    el.innerHTML=`<p style="color:#ef4444;margin-bottom:10px">⚠️ Não foi possível consultar o Bolsa Família automaticamente no momento.</p>${dd2LinkManualBolsa()}`;
+    return;
+  }
+  if(!data.length){el.innerHTML=`<p style="color:#22c55e;font-weight:600;margin-bottom:10px">✅ Nenhuma parcela de Bolsa Família encontrada para este CPF.</p>${dd2LinkManualBolsa()}`;return;}
   el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Mês Referência</th><th>UF</th><th>Município</th><th>NIS</th><th>Beneficiário</th><th>Valor</th></tr></thead>
   <tbody>${data.slice(0,50).map(p=>`<tr>
     <td>${escapeHtml(p.dataMesReferencia||p.dataMesCompetencia)||'—'}</td>
@@ -575,7 +566,7 @@ function dd2RenderBolsaFamilia(data){
     <td>${escapeHtml(p.titularBolsaFamilia?.nome)||'—'}</td>
     <td>${p.valor!=null?'R$ '+Number(p.valor).toLocaleString('pt-BR',{minimumFractionDigits:2}):'—'}</td>
   </tr>`).join('')}</tbody></table></div>
-  <div class="dd2-links-ext"><a href="https://portaldatransparencia.gov.br/beneficios/novo-bolsa-familia" target="_blank" class="dd2-link-ext">🔗 Ver no Portal da Transparência</a></div>`;
+  ${dd2LinkManualBolsa()}`;
 }
 
 function dd2RenderMidia(data){
