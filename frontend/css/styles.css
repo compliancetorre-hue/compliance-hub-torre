@@ -810,3 +810,21 @@
   outline: 1.5px solid var(--accent);
   background: rgba(0,196,154,.08);
 }
+
+/* ── FERRAMENTAS ADMIN — painel retrátil ── */
+.admin-tools-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; background: transparent; border: none;
+  color: rgba(255,255,255,.55); font-size: .68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .5px;
+  padding: 6px 4px; cursor: pointer; font-family: inherit;
+  transition: color .15s;
+}
+.admin-tools-toggle:hover { color: #fff; }
+.admin-tools-arrow { display: inline-block; font-size: .65rem; transition: transform .2s ease; }
+.admin-tools-arrow.open { transform: rotate(90deg); }
+.admin-tools-content {
+  overflow: hidden; max-height: 500px; opacity: 1;
+  transition: max-height .25s ease, opacity .2s ease, margin .2s ease;
+}
+.admin-tools-content.collapsed { max-height: 0; opacity: 0; }
