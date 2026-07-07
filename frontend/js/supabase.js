@@ -136,7 +136,10 @@ async function loadFromSupabase() {
     if(filiais.length > 0) {
       DB.filiais = filiais.map(f => ({
         id:f.id, nome:f.nome, cnpj:f.cnpj||'', cidade:f.cidade||'',
-        resp:f.resp||'', setor:f.setor||'', setores:f.setores||''
+        resp:f.resp||'', respTel:f.resp_tel||'',
+        gerente:f.gerente||'', gerenteTel:f.gerente_tel||'',
+        sub:f.sub||'', subTel:f.sub_tel||'',
+        setor:f.setor||'', setores:f.setores||''
       }));
     }
 
@@ -253,7 +256,13 @@ async function sbDeleteDenuncia(id) {
 }
 async function sbSaveFilial(f) {
   if(!USE_SUPABASE) return;
-  const row = { id:f.id, nome:f.nome, cnpj:f.cnpj||'', cidade:f.cidade||'', resp:f.resp||'', setor:f.setor||'', setores:f.setores||'' };
+  const row = {
+    id:f.id, nome:f.nome, cnpj:f.cnpj||'', cidade:f.cidade||'',
+    resp:f.resp||'', resp_tel:f.respTel||'',
+    gerente:f.gerente||'', gerente_tel:f.gerenteTel||'',
+    sub:f.sub||'', sub_tel:f.subTel||'',
+    setor:f.setor||'', setores:f.setores||''
+  };
   try { await sbUpsert('filiais', row); auditLog('update','filiais',`Filial "${f.nome}" salva`,{nome:f.nome}); }
   catch(e) { console.warn('sbSaveFilial:', e.message); }
 }
