@@ -251,11 +251,6 @@ function dd2FormatDoc(input){
   input.value=v;
 }
 
-function dd2GetToken(){
-  const t=localStorage.getItem('ch_token');
-  return t||null;
-}
-
 function dd2SetStep(id,state){
   const el=document.getElementById('dd2-step-'+id);
   if(!el)return;
@@ -271,7 +266,6 @@ async function dd2Iniciar(){
   const doc=document.getElementById('dd2-doc').value.replace(/\D/g,'');
   const tipo=document.getElementById('dd2-tipo').value;
   if(doc.length<11){alert('Informe um documento válido.');return;}
-  const token=dd2GetToken();
   const scCad=document.getElementById('dd2-sc-cadastral').checked;
   const scFis=document.getElementById('dd2-sc-fiscal').checked;
   const scJud=document.getElementById('dd2-sc-judicial').checked;
@@ -283,12 +277,22 @@ async function dd2Iniciar(){
   document.getElementById('dd2-sec-midia').style.display=scMid?'block':'none';
   dd2SetProgress(5);
   dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[]};dd2PepData=[];dd2MidiaData=[];
-  const headers={'Authorization':'Bearer '+token};
   const tasks=[];
+
+  // Failsafe: se alguma chamada travar inesperadamente, libera a tela mesmo assim
+  let failsafeAcionado=false;
+  const failsafe=setTimeout(()=>{
+    failsafeAcionado=true;
+    console.warn('DD2: failsafe acionado');
+    document.getElementById('dd2-progress').style.display='none';
+    document.getElementById('dd2-report').style.display='block';
+  },30000);
+
+  try {
   if(scCad&&tipo==='cnpj'){
     dd2SetStep('cadastral','active');
     tasks.push(
-      apiFetch('/proxy/cnpj/'+doc)
+      dd2BuscarCNPJ(doc)
         .then(d=>{
           dd2CadastralData=d;
           dd2SetStep('cadastral','done');
@@ -309,7 +313,7 @@ async function dd2Iniciar(){
   if(scJud){
     dd2SetStep('judicial','active');
     tasks.push(
-      dd2FetchJudicial(doc,headers).then(()=>{
+      dd2FetchJudicial(doc).then(()=>{
         dd2SetStep('judicial','done');dd2SetProgress(50);
       }).catch(()=>{dd2SetStep('judicial','error');dd2RenderJudicial([]);})
     );
@@ -337,7 +341,7 @@ async function dd2Iniciar(){
     dd2SetStep('pep','active');
     tasks.push(
       (async()=>{
-        const nome=dd2CadastralData?.razao_social||dd2CadastralData?.nome||'';
+        const nome=dd2CadastralData?.razao||'';
         return dd2FetchPep(nome,doc);
       })().then(d=>{
         dd2PepData=d;dd2SetStep('pep','done');dd2SetProgress(78);
@@ -352,7 +356,7 @@ async function dd2Iniciar(){
     dd2SetStep('midia','active');
     tasks.push(
       (async()=>{
-        const nome=dd2CadastralData?.razao_social||dd2CadastralData?.nome||doc;
+        const nome=dd2CadastralData?.razao||doc;
         return fetch('https://corsproxy.io/?url='+encodeURIComponent('https://api.duckduckgo.com/?q='+encodeURIComponent(nome+' corrupção fraude escândalo')+'&format=json&no_html=1&skip_disambig=1'),{signal:AbortSignal.timeout(10000)})
           .then(r=>r.ok?r.json():null)
           .then(d=>{
@@ -373,8 +377,31 @@ async function dd2Iniciar(){
   dd2SetProgress(100);
   const now=new Date();
   document.getElementById('dd2-export-meta').textContent='Relatório gerado em '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR')+' — '+doc;
-  document.getElementById('dd2-progress').style.display='none';
-  document.getElementById('dd2-report').style.display='block';
+  } catch(e) {
+    console.error('dd2Iniciar erro:', e);
+  } finally {
+    clearTimeout(failsafe);
+    if(!failsafeAcionado){
+      document.getElementById('dd2-progress').style.display='none';
+      document.getElementById('dd2-report').style.display='block';
+    }
+  }
+}
+
+// Busca CNPJ direto nas APIs públicas (mesmo padrão do Due Diligence 1),
+// com fallback entre provedores e normalização unificada dos campos.
+async function dd2BuscarCNPJ(doc){
+  const apis=[
+    {name:'BrasilAPI',url:`https://brasilapi.com.br/api/cnpj/v1/${doc}`},
+    {name:'ReceitaWS',url:`https://www.receitaws.com.br/v1/cnpj/${doc}`},
+    {name:'CNPJ.ws',url:`https://publica.cnpj.ws/cnpj/${doc}`}
+  ];
+  let found=null;
+  for(const a of apis){ found=await ddTryApi(a.url,a.name,null); if(found) break; }
+  if(!found) throw new Error('CNPJ APIs indisponíveis');
+  const norm=ddNorm(found.data,found.api);
+  if(!norm) throw new Error('Falha ao normalizar dados do CNPJ');
+  return norm;
 }
 
 async function dd2FetchJudicial(doc,headers){
@@ -406,38 +433,33 @@ async function dd2FetchPep(nome,doc){
 
 function dd2RenderCadastral(d){
   const el=document.getElementById('dd2-cadastral-content');
-  if(!d){el.innerHTML='<p style="color:#ef4444">Não foi possível obter dados cadastrais.</p>';return;}
-  const r=d;
-  const sit=r.situacao_cadastral||r.situacao||r.status||'—';
+  if(!d){el.innerHTML='<p style="color:#ef4444">Não foi possível obter dados cadastrais (APIs indisponíveis no momento).</p>';return;}
+  const sit=d.situacao||'—';
   const sitOk=(sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'));
   el.innerHTML=`<div class="dd2-grid-3">
-    <div class="dd2-field-item"><label>CNPJ</label><span>${r.cnpj||'—'}</span></div>
-    <div class="dd2-field-item"><label>Razão Social</label><span>${r.razao_social||r.nome||'—'}</span></div>
-    <div class="dd2-field-item"><label>Nome Fantasia</label><span>${r.nome_fantasia||'—'}</span></div>
-    <div class="dd2-field-item"><label>Situação Cadastral</label><span><span class="dd2-badge ${sitOk?'ok':'danger'}">${sit}</span></span></div>
-    <div class="dd2-field-item"><label>Data de Abertura</label><span>${r.data_abertura||r.data_inicio_atividade||'—'}</span></div>
-    <div class="dd2-field-item"><label>Natureza Jurídica</label><span>${r.natureza_juridica?.descricao||r.natureza_juridica||'—'}</span></div>
-    <div class="dd2-field-item"><label>Porte</label><span>${r.porte?.descricao||r.porte||'—'}</span></div>
-    <div class="dd2-field-item"><label>Capital Social</label><span>R$ ${Number(r.capital_social||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></div>
-    <div class="dd2-field-item"><label>CNAE Principal</label><span>${r.cnae_fiscal_descricao||r.cnae_fiscal?.descricao||'—'}</span></div>
-    <div class="dd2-field-item" style="grid-column:1/-1"><label>Endereço</label><span>${[r.logradouro,r.numero,r.complemento,r.bairro,r.municipio?.descricao||r.municipio,r.uf].filter(Boolean).join(', ')||'—'}</span></div>
+    <div class="dd2-field-item"><label>Razão Social</label><span>${escapeHtml(d.razao)||'—'}</span></div>
+    <div class="dd2-field-item"><label>Situação Cadastral</label><span><span class="dd2-badge ${sitOk?'ok':'danger'}">${escapeHtml(sit)}</span></span></div>
+    <div class="dd2-field-item"><label>Data de Abertura</label><span>${escapeHtml(d.abertura)||'—'}</span></div>
+    <div class="dd2-field-item"><label>Natureza Jurídica</label><span>${escapeHtml(d.natureza)||'—'}</span></div>
+    <div class="dd2-field-item"><label>Porte</label><span>${escapeHtml(d.porte)||'—'}</span></div>
+    <div class="dd2-field-item"><label>Capital Social</label><span>${escapeHtml(d.capital)||'—'}</span></div>
+    <div class="dd2-field-item"><label>CNAE Principal</label><span>${escapeHtml(d.cnae_pri?.desc)||'—'}</span></div>
+    <div class="dd2-field-item" style="grid-column:1/-1"><label>Endereço</label><span>${escapeHtml(d.endereco)||'—'}</span></div>
   </div>`;
-  if(r.qsa?.length){
+  if(d.socios?.length){
     document.getElementById('dd2-sec-qsa').style.display='block';
-    document.getElementById('dd2-qsa-content').innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Nome</th><th>Qualificação</th><th>Faixa Etária</th></tr></thead><tbody>${r.qsa.map(s=>`<tr><td>${s.nome_socio||s.nome||'—'}</td><td>${s.qualificacao_socio?.descricao||s.qualificacao||'—'}</td><td>${s.faixa_etaria||'—'}</td></tr>`).join('')}</tbody></table></div>`;
+    document.getElementById('dd2-qsa-content').innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Nome</th><th>Qualificação</th></tr></thead><tbody>${d.socios.map(s=>`<tr><td>${escapeHtml(s.nome)||'—'}</td><td>${escapeHtml(s.qual)||'—'}</td></tr>`).join('')}</tbody></table></div>`;
   }
 }
 
 function dd2RenderFiscal(d){
   const el=document.getElementById('dd2-fiscal-content');
-  if(!d){el.innerHTML='<p style="color:#ef4444">Dados fiscais não disponíveis.</p>';return;}
-  const sit=d.situacao_cadastral||d.situacao||d.status||'—';
+  if(!d){el.innerHTML='<p style="color:#ef4444">Dados fiscais não disponíveis (APIs indisponíveis no momento).</p>';return;}
+  const sit=d.situacao||'—';
   const sitOk=(sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'));
   el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Verificação</th><th>Resultado</th><th>Status</th></tr></thead><tbody>
-    <tr><td>Situação na Receita Federal</td><td>${sit}</td><td><span class="dd2-badge ${sitOk?'ok':'danger'}">${sitOk?'Regular':'Irregular'}</span></td></tr>
-    <tr><td>Data de Abertura</td><td>${d.data_abertura||d.data_inicio_atividade||'—'}</td><td><span class="dd2-badge info">Info</span></td></tr>
-    <tr><td>Optante Simples Nacional</td><td>${d.opcao_pelo_simples?'Sim':'Não'}</td><td><span class="dd2-badge info">Info</span></td></tr>
-    <tr><td>Optante MEI</td><td>${d.opcao_pelo_mei?'Sim':'Não'}</td><td><span class="dd2-badge info">Info</span></td></tr>
+    <tr><td>Situação na Receita Federal</td><td>${escapeHtml(sit)}</td><td><span class="dd2-badge ${sitOk?'ok':'danger'}">${sitOk?'Regular':'Irregular'}</span></td></tr>
+    <tr><td>Data de Abertura</td><td>${escapeHtml(d.abertura)||'—'}</td><td><span class="dd2-badge info">Info</span></td></tr>
   </tbody></table></div>`;
 }
 
@@ -510,7 +532,7 @@ function dd2RenderScore(){
   const pillarsEl=document.getElementById('dd2-pillars');
   let score=0;
   const d=dd2CadastralData;
-  const sit=d?.situacao_cadastral||d?.situacao||d?.status||'';
+  const sit=d?.situacao||'';
   if(sit&&!sit.toUpperCase().includes('ATIVA')&&!sit.toUpperCase().includes('REGULAR'))score+=30;
   const sanTotal=(dd2SancoesData?.ceis||[]).length+(dd2SancoesData?.cnep||[]).length;
   if(sanTotal>0)score=Math.min(100,score+40);
@@ -538,8 +560,8 @@ function dd2RenderTimeline(){
   const el=document.getElementById('dd2-timeline-content');
   const events=[];
   const d=dd2CadastralData;
-  if(d?.data_abertura||d?.data_inicio_atividade){
-    events.push({date:d.data_abertura||d.data_inicio_atividade,text:'Empresa aberta',sub:'Receita Federal',cls:'ok'});
+  if(d?.abertura){
+    events.push({date:d.abertura,text:'Empresa aberta',sub:'Receita Federal',cls:'ok'});
   }
   dd2JudicialData.slice(0,5).forEach(p=>{
     const dt=(p.dataAjuizamento||p.dataHoraUltimaAtualizacao||'').substring(0,10);
@@ -560,7 +582,7 @@ function dd2RenderTimeline(){
 function dd2RenderChecklist(){
   const el=document.getElementById('dd2-checklist-content');
   const d=dd2CadastralData;
-  const sit=d?.situacao_cadastral||d?.situacao||d?.status||'';
+  const sit=d?.situacao||'';
   const sanTotal=(dd2SancoesData?.ceis||[]).length+(dd2SancoesData?.cnep||[]).length;
   const items=[
     {ok:!!d,label:'Dados cadastrais obtidos',icon:'&#127963;'},
