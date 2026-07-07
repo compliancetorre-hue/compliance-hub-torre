@@ -345,8 +345,8 @@ async function dd2Iniciar(){
     dd2SetStep('sancoes','active');
     tasks.push(
       Promise.all([
-        fetch(dd2PortalUrl('ceis','cnpjSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():[]).catch(()=>[]),
-        fetch(dd2PortalUrl('cnep','cnpjSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():[]).catch(()=>[])
+        fetch(dd2PortalUrl('ceis','codigoSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():[]).catch(()=>[]),
+        fetch(dd2PortalUrl('cnep','codigoSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():[]).catch(()=>[])
       ]).then(([ceis,cnep])=>{
         dd2SancoesData={ceis:Array.isArray(ceis)?ceis:[],cnep:Array.isArray(cnep)?cnep:[]};
         dd2SetStep('sancoes','done');dd2SetProgress(65);
@@ -362,7 +362,7 @@ async function dd2Iniciar(){
     tasks.push(
       (async()=>{
         const nome=dd2CadastralData?.razao||'';
-        return dd2FetchPep(nome,doc);
+        return dd2FetchPep(nome,tipo==='cpf'?doc:'');
       })().then(d=>{
         dd2PepData=d;dd2SetStep('pep','done');dd2SetProgress(78);
         dd2RenderPep(d);
@@ -457,12 +457,14 @@ async function dd2FetchJudicial(doc,headers){
   dd2RenderJudicial(results);
 }
 
-async function dd2FetchPep(nome,doc){
-  if(!nome&&!doc)return[];
-  const q=nome?encodeURIComponent(nome.split(' ').slice(0,3).join(' ')):doc;
-  const r=await fetch(dd2PortalUrl('pep','nome='+q+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)});
+async function dd2FetchPep(nome,cpf){
+  if(!nome&&!cpf)return[];
+  // Busca exata por CPF quando disponível (muito mais precisa que por nome)
+  const qs=cpf?('cpf='+cpf):('nome='+encodeURIComponent(nome.split(' ').slice(0,3).join(' ')));
+  const r=await fetch(dd2PortalUrl('peps',qs+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)});
   if(!r.ok)return[];
-  return await r.json();
+  const d=await r.json();
+  return Array.isArray(d)?d:[];
 }
 
 // Consulta se o CPF/NIS recebeu parcelas do Bolsa Família (Portal da Transparência).
@@ -550,14 +552,14 @@ function dd2RenderSancoes(d){
   const all=[...ceis.map(s=>({...s,_base:'CEIS'})),...cnep.map(s=>({...s,_base:'CNEP'}))];
   if(!all.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhuma sanção encontrada nas bases CEIS/CNEP.</p>';return;}
   el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Base</th><th>Tipo de Sanção</th><th>Órgão Sancionador</th><th>Vigência</th><th>Status</th></tr></thead>
-  <tbody>${all.map(s=>`<tr><td><span class="dd2-badge danger">${s._base}</span></td><td>${s.tipoSancao||s.tipo||'—'}</td><td>${s.orgaoSancionador?.nome||s.orgaoSancionador||'—'}</td><td>${s.dataInicioSancao||'—'} – ${s.dataFimSancao||'vigente'}</td><td><span class="dd2-badge ${s.dataFimSancao?'warn':'danger'}">${s.dataFimSancao?'Encerrada':'Vigente'}</span></td></tr>`).join('')}</tbody></table></div>`;
+  <tbody>${all.map(s=>`<tr><td><span class="dd2-badge danger">${s._base}</span></td><td>${escapeHtml(s.tipoSancao?.descricaoPortal||s.tipoSancao?.descricaoResumida)||'—'}</td><td>${escapeHtml(s.orgaoSancionador?.nome)||'—'}</td><td>${escapeHtml(s.dataInicioSancao)||'—'} – ${escapeHtml(s.dataFimSancao)||'vigente'}</td><td><span class="dd2-badge ${s.dataFimSancao?'warn':'danger'}">${s.dataFimSancao?'Encerrada':'Vigente'}</span></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function dd2RenderPep(data){
   const el=document.getElementById('dd2-pep-content');
   if(!Array.isArray(data)||!data.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhum registro PEP encontrado.</p>';return;}
   el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Nome</th><th>Cargo / Função</th><th>Órgão</th><th>Período</th><th>Status</th></tr></thead>
-  <tbody>${data.slice(0,50).map(p=>`<tr><td>${p.nome||'—'}</td><td>${p.funcao||p.cargo||'—'}</td><td>${p.orgao||'—'}</td><td>${p.dataInicio||'—'} – ${p.dataFim||'atual'}</td><td><span class="dd2-badge pep">&#9888; PEP</span></td></tr>`).join('')}</tbody></table></div>`;
+  <tbody>${data.slice(0,50).map(p=>`<tr><td>${escapeHtml(p.nome)||'—'}</td><td>${escapeHtml(p.descricao_funcao)||'—'}</td><td>${escapeHtml(p.nome_orgao)||'—'}</td><td>${escapeHtml(p.dt_inicio_exercicio)||'—'} – ${escapeHtml(p.dt_fim_exercicio)||'atual'}</td><td><span class="dd2-badge pep">&#9888; PEP</span></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function dd2RenderBolsaFamilia(data){
@@ -566,12 +568,12 @@ function dd2RenderBolsaFamilia(data){
   if(!data.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhuma parcela de Bolsa Família encontrada para este CPF.</p>';return;}
   el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Mês Referência</th><th>UF</th><th>Município</th><th>NIS</th><th>Beneficiário</th><th>Valor</th></tr></thead>
   <tbody>${data.slice(0,50).map(p=>`<tr>
-    <td>${escapeHtml(p.mesReferencia||p.mesCompetencia)||'—'}</td>
-    <td>${escapeHtml(p.uf)||'—'}</td>
-    <td>${escapeHtml(p.municipio||p.nomeMunicipio)||'—'}</td>
-    <td>${escapeHtml(p.nis)||'—'}</td>
-    <td>${escapeHtml(p.nomeBeneficiario||p.beneficiario||p.nome)||'—'}</td>
-    <td>${escapeHtml(p.valor||p.valorTotalPeriodo||p.valorParcela)||'—'}</td>
+    <td>${escapeHtml(p.dataMesReferencia||p.dataMesCompetencia)||'—'}</td>
+    <td>${escapeHtml(p.municipio?.uf?.sigla)||'—'}</td>
+    <td>${escapeHtml(p.municipio?.nomeIBGE)||'—'}</td>
+    <td>${escapeHtml(p.titularBolsaFamilia?.nis)||'—'}</td>
+    <td>${escapeHtml(p.titularBolsaFamilia?.nome)||'—'}</td>
+    <td>${p.valor!=null?'R$ '+Number(p.valor).toLocaleString('pt-BR',{minimumFractionDigits:2}):'—'}</td>
   </tr>`).join('')}</tbody></table></div>
   <div class="dd2-links-ext"><a href="https://portaldatransparencia.gov.br/beneficios/novo-bolsa-familia" target="_blank" class="dd2-link-ext">🔗 Ver no Portal da Transparência</a></div>`;
 }
