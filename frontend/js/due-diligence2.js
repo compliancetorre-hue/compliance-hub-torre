@@ -122,6 +122,7 @@ function dd2HTML(){return `
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-sancoes" checked> &#128171; Sanções CEIS/CNEP</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-pep" checked> &#127963; PEP</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-midia"> &#128240; Mídia Negativa</label>
+      <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-bolsa" checked> &#128176; Bolsa Família (CPF)</label>
     </div>
     <button class="dd2-btn-search" onclick="dd2Iniciar()">&#128269; Investigar</button>
   </div>
@@ -136,6 +137,7 @@ function dd2HTML(){return `
       <span class="dd2-step" id="dd2-step-sancoes">&#128171; Sanções</span>
       <span class="dd2-step" id="dd2-step-pep">&#127963; PEP</span>
       <span class="dd2-step" id="dd2-step-midia">&#128240; Mídia</span>
+      <span class="dd2-step" id="dd2-step-bolsa">&#128176; Bolsa Família</span>
       <span class="dd2-step" id="dd2-step-analise">&#128202; Análise</span>
     </div>
   </div>
@@ -188,6 +190,10 @@ function dd2HTML(){return `
       <div class="dd2-card-title">&#128240; Mídia Negativa</div>
       <div id="dd2-midia-content"><div class="dd2-loading">&#9203; Buscando notícias negativas...</div></div>
     </div>
+    <div class="dd2-card" id="dd2-sec-bolsa" style="display:none">
+      <div class="dd2-card-title">&#128176; Bolsa Família</div>
+      <div id="dd2-bolsa-content"><div class="dd2-loading">&#9203; Consultando Portal da Transparência...</div></div>
+    </div>
     <div class="dd2-card" id="dd2-sec-timeline">
       <div class="dd2-card-title">&#128197; Linha do Tempo</div>
       <div class="dd2-timeline" id="dd2-timeline-content"></div>
@@ -207,6 +213,17 @@ function dd2HTML(){return `
 
 // DD2_API removido — chamadas migradas para APIs públicas diretas
 const DD2_DATAJUD_KEY = 'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==';
+
+// A chave da API do Portal da Transparência é PESSOAL e NUNCA deve existir no
+// cliente (ficaria visível a qualquer visitante via "Ver código-fonte"). As
+// consultas passam pela Edge Function, que guarda a chave como secret do lado
+// do servidor — ver rota /portal/:endpoint documentada junto ao backend.
+function dd2PortalHeaders(){
+  return { 'x-app-token': (typeof getAppToken==='function'?getAppToken():'') };
+}
+function dd2PortalUrl(rota, params){
+  return `${EDGE_URL}/portal/${rota}?${params}`;
+}
 const DD2_TRIBUNAIS = [
   {sigla:'TJSP',nome:'TJSP'},
   {sigla:'TJRJ',nome:'TJRJ'},
@@ -232,6 +249,7 @@ let dd2CadastralData = null;
 let dd2SancoesData = {ceis:[],cnep:[]};
 let dd2PepData = [];
 let dd2MidiaData = [];
+let dd2BolsaData = [];
 
 function dd2FormatDoc(input){
   const tipo = document.getElementById('dd2-tipo').value;
@@ -272,11 +290,13 @@ async function dd2Iniciar(){
   const scSan=document.getElementById('dd2-sc-sancoes').checked;
   const scPep=document.getElementById('dd2-sc-pep').checked;
   const scMid=document.getElementById('dd2-sc-midia').checked;
+  const scBolsa=document.getElementById('dd2-sc-bolsa').checked;
   document.getElementById('dd2-progress').style.display='block';
   document.getElementById('dd2-report').style.display='none';
   document.getElementById('dd2-sec-midia').style.display=scMid?'block':'none';
+  document.getElementById('dd2-sec-bolsa').style.display=scBolsa?'block':'none';
   dd2SetProgress(5);
-  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[]};dd2PepData=[];dd2MidiaData=[];
+  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[]};dd2PepData=[];dd2MidiaData=[];dd2BolsaData=[];
   const tasks=[];
 
   // Failsafe: se alguma chamada travar inesperadamente, libera a tela mesmo assim
@@ -325,8 +345,8 @@ async function dd2Iniciar(){
     dd2SetStep('sancoes','active');
     tasks.push(
       Promise.all([
-        fetch('https://api.portaldatransparencia.gov.br/api-de-dados/ceis?cnpjSancionado='+doc+'&pagina=1',{signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():[]).catch(()=>[]),
-        fetch('https://api.portaldatransparencia.gov.br/api-de-dados/cnep?cnpjSancionado='+doc+'&pagina=1',{signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():[]).catch(()=>[])
+        fetch(dd2PortalUrl('ceis','cnpjSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():[]).catch(()=>[]),
+        fetch(dd2PortalUrl('cnep','cnpjSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():[]).catch(()=>[])
       ]).then(([ceis,cnep])=>{
         dd2SancoesData={ceis:Array.isArray(ceis)?ceis:[],cnep:Array.isArray(cnep)?cnep:[]};
         dd2SetStep('sancoes','done');dd2SetProgress(65);
@@ -367,6 +387,20 @@ async function dd2Iniciar(){
       })().catch(()=>{dd2SetStep('midia','error');dd2RenderMidia([]);})
     );
   } else { dd2SetStep('midia','done'); }
+  if(scBolsa&&tipo==='cpf'){
+    dd2SetStep('bolsa','active');
+    tasks.push(
+      dd2FetchBolsaFamilia(doc).then(d=>{
+        dd2BolsaData=d;dd2SetStep('bolsa','done');dd2SetProgress(92);
+        dd2RenderBolsaFamilia(d);
+      }).catch(()=>{dd2SetStep('bolsa','error');dd2RenderBolsaFamilia(null);})
+    );
+  } else if(scBolsa){
+    dd2SetStep('bolsa','done');
+    document.getElementById('dd2-bolsa-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta de Bolsa Família disponível apenas para CPF.</p>';
+  } else {
+    dd2SetStep('bolsa','done');
+  }
   await Promise.allSettled(tasks);
   dd2SetStep('analise','active');
   dd2SetProgress(95);
@@ -426,9 +460,19 @@ async function dd2FetchJudicial(doc,headers){
 async function dd2FetchPep(nome,doc){
   if(!nome&&!doc)return[];
   const q=nome?encodeURIComponent(nome.split(' ').slice(0,3).join(' ')):doc;
-  const r=await fetch('https://api.portaldatransparencia.gov.br/api-de-dados/pep?nome='+q+'&pagina=1',{signal:AbortSignal.timeout(10000)});
+  const r=await fetch(dd2PortalUrl('pep','nome='+q+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)});
   if(!r.ok)return[];
   return await r.json();
+}
+
+// Consulta se o CPF/NIS recebeu parcelas do Bolsa Família (Portal da Transparência).
+async function dd2FetchBolsaFamilia(cpf){
+  const r=await fetch(dd2PortalUrl('bolsa-familia','codigo='+cpf+'&pagina=1'),{
+    headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)
+  });
+  if(!r.ok) throw new Error('Falha ao consultar Bolsa Família');
+  const d=await r.json();
+  return Array.isArray(d)?d:[];
 }
 
 function dd2RenderCadastral(d){
@@ -516,6 +560,22 @@ function dd2RenderPep(data){
   <tbody>${data.slice(0,50).map(p=>`<tr><td>${p.nome||'—'}</td><td>${p.funcao||p.cargo||'—'}</td><td>${p.orgao||'—'}</td><td>${p.dataInicio||'—'} – ${p.dataFim||'atual'}</td><td><span class="dd2-badge pep">&#9888; PEP</span></td></tr>`).join('')}</tbody></table></div>`;
 }
 
+function dd2RenderBolsaFamilia(data){
+  const el=document.getElementById('dd2-bolsa-content');
+  if(!Array.isArray(data)){el.innerHTML='<p style="color:#ef4444">Não foi possível consultar o Bolsa Família no momento.</p>';return;}
+  if(!data.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhuma parcela de Bolsa Família encontrada para este CPF.</p>';return;}
+  el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Mês Referência</th><th>UF</th><th>Município</th><th>NIS</th><th>Beneficiário</th><th>Valor</th></tr></thead>
+  <tbody>${data.slice(0,50).map(p=>`<tr>
+    <td>${escapeHtml(p.mesReferencia||p.mesCompetencia)||'—'}</td>
+    <td>${escapeHtml(p.uf)||'—'}</td>
+    <td>${escapeHtml(p.municipio||p.nomeMunicipio)||'—'}</td>
+    <td>${escapeHtml(p.nis)||'—'}</td>
+    <td>${escapeHtml(p.nomeBeneficiario||p.beneficiario||p.nome)||'—'}</td>
+    <td>${escapeHtml(p.valor||p.valorTotalPeriodo||p.valorParcela)||'—'}</td>
+  </tr>`).join('')}</tbody></table></div>
+  <div class="dd2-links-ext"><a href="https://portaldatransparencia.gov.br/beneficios/novo-bolsa-familia" target="_blank" class="dd2-link-ext">🔗 Ver no Portal da Transparência</a></div>`;
+}
+
 function dd2RenderMidia(data){
   const el=document.getElementById('dd2-midia-content');
   if(!data.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhuma notícia negativa encontrada.</p>';return;}
@@ -592,6 +652,9 @@ function dd2RenderChecklist(){
     {ok:dd2PepData.length===0,label:'Sem registro PEP',icon:'&#127963;'},
     {ok:dd2MidiaData.length===0,label:'Sem notícias negativas',icon:'&#128240;'}
   ];
+  if(document.getElementById('dd2-tipo').value==='cpf'){
+    items.push({ok:dd2BolsaData.length===0,label:dd2BolsaData.length?`Recebe Bolsa Família (${dd2BolsaData.length} parcela(s))`:'Não recebe Bolsa Família',icon:'&#128176;'});
+  }
   el.innerHTML=items.map(i=>`<div class="dd2-chk-item ${i.ok?'ok':'bad'}">
     <span>${i.ok?'&#9989;':'&#10060;'}</span>
     <span>${i.icon} ${i.label}</span>
