@@ -19,7 +19,7 @@ function renderFiliais() {
           <div style="font-size:.76rem;color:var(--text-muted)">${f.cidade} · ${f.cnpj}</div>
         </div>
       </div>
-      <div style="font-size:.8rem;margin-bottom:10px"><strong>Resp. Compliance:</strong> ${f.resp}</div>
+      <div style="font-size:.8rem;margin-bottom:10px"><strong>Resp. Regional, Gerente e Sub. :</strong> ${f.resp}</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
         ${setoresArr.map(s=>`<span style="background:#f0f4f8;border-radius:20px;padding:2px 10px;font-size:.73rem;font-weight:600;color:var(--text-muted)">${s}</span>`).join('')}
       </div>
