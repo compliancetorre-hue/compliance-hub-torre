@@ -38,7 +38,7 @@ function renderFiliais() {
         </div>
       </div>
       <div style="margin-bottom:10px">
-        ${_filialRespRow('Resp. Regional', '🧭', f.resp, f.respTel)}
+        ${_filialRespRow('Regional', '🧭', f.resp, f.respTel)}
         ${_filialRespRow('Gerente', '👔', f.gerente, f.gerenteTel)}
         ${_filialRespRow('Sub.', '🧑‍💼', f.sub, f.subTel)}
       </div>
@@ -118,7 +118,6 @@ function salvarFilial() {
   if(window._editFilialId) {
     const f = DB.filiais.find(x => x.id === window._editFilialId);
     if(f) Object.assign(f, campos);
-    window._editFilialId = null;
   } else {
     DB.filiais.push({ id: DB._ids.filial++, ...campos });
   }
