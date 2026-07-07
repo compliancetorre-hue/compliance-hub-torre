@@ -442,13 +442,21 @@ async function dd2FetchPep(nome,cpf){
 }
 
 // Consulta se o CPF/NIS recebeu parcelas do Bolsa Família (Portal da Transparência).
-// A API exige um mês de referência (AAAAMM) — consultamos os últimos 3 meses fechados.
+// A API exige um mês de referência (AAAAMM) por chamada — consultamos todo o
+// período de 06/2025 a 07/2026, mês a mês.
+function dd2BolsaMeses(){
+  const meses=[];
+  let ano=2025, mes=6; // início: 06/2025
+  const anoFim=2026, mesFim=7; // fim: 07/2026
+  while(ano<anoFim || (ano===anoFim && mes<=mesFim)){
+    meses.push(ano+String(mes).padStart(2,'0'));
+    mes++;
+    if(mes>12){mes=1;ano++;}
+  }
+  return meses;
+}
 async function dd2FetchBolsaFamilia(cpf){
-  const hoje=new Date();
-  const meses=[1,2,3].map(i=>{
-    const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);
-    return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0');
-  });
+  const meses=dd2BolsaMeses();
   const respostas=await Promise.all(meses.map(async anoMes=>{
     const r=await fetch(dd2PortalUrl('bolsa-familia','codigo='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'),{
       headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)
