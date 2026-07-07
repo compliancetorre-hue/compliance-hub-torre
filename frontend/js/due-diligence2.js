@@ -124,6 +124,16 @@ function dd2HTML(){return `
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-midia"> &#128240; Mídia Negativa</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-bolsa" checked> &#128176; Bolsa Família (CPF)</label>
     </div>
+    <div class="dd2-form-row" style="margin-top:-6px;margin-bottom:16px">
+      <div class="dd2-form-group" style="max-width:160px">
+        <label>Bolsa Família — Período de</label>
+        <input type="month" id="dd2-bolsa-de" value="2025-06"/>
+      </div>
+      <div class="dd2-form-group" style="max-width:160px">
+        <label>Período até</label>
+        <input type="month" id="dd2-bolsa-ate" value="2026-07"/>
+      </div>
+    </div>
     <button class="dd2-btn-search" onclick="dd2Iniciar()">&#128269; Investigar</button>
   </div>
 
@@ -373,9 +383,9 @@ async function dd2Iniciar(){
   if(scBolsa&&tipo==='cpf'){
     dd2SetStep('bolsa','active');
     tasks.push(
-      dd2FetchBolsaFamilia(doc).then(d=>{
-        dd2BolsaData=d;dd2SetStep('bolsa','done');dd2SetProgress(92);
-        dd2RenderBolsaFamilia(d);
+      dd2FetchBolsaFamilia(doc).then(res=>{
+        dd2BolsaData=res.items;dd2SetStep('bolsa','done');dd2SetProgress(92);
+        dd2RenderBolsaFamilia(res);
       }).catch(()=>{dd2SetStep('bolsa','error');dd2RenderBolsaFamilia(null);})
     );
   } else if(scBolsa){
@@ -442,16 +452,20 @@ async function dd2FetchPep(nome,cpf){
 }
 
 // Consulta se o CPF/NIS recebeu parcelas do Bolsa Família (Portal da Transparência).
-// A API exige um mês de referência (AAAAMM) por chamada — consultamos todo o
-// período de 06/2025 a 07/2026, mês a mês.
+// A API exige um mês de referência (AAAAMM) por chamada — o período é definido
+// pelos campos "Período de" / "Período até" do formulário (padrão: 06/2025 a 07/2026).
 function dd2BolsaMeses(){
+  const de=document.getElementById('dd2-bolsa-de')?.value||'2025-06';
+  const ate=document.getElementById('dd2-bolsa-ate')?.value||'2026-07';
+  let [ano,mes]=de.split('-').map(Number);
+  const [anoFim,mesFim]=ate.split('-').map(Number);
   const meses=[];
-  let ano=2025, mes=6; // início: 06/2025
-  const anoFim=2026, mesFim=7; // fim: 07/2026
-  while(ano<anoFim || (ano===anoFim && mes<=mesFim)){
+  let guardaChuva=0; // proteção contra período invertido/gigante
+  while((ano<anoFim || (ano===anoFim && mes<=mesFim)) && guardaChuva<60){
     meses.push(ano+String(mes).padStart(2,'0'));
     mes++;
     if(mes>12){mes=1;ano++;}
+    guardaChuva++;
   }
   return meses;
 }
@@ -461,25 +475,28 @@ function dd2BolsaMeses(){
 // Uma chamada isolada falhar não derruba a consulta toda (rede instável, um
 // mês sem dados etc.) — só se TODAS falharem é que reportamos erro de verdade,
 // pra não mascarar uma falha real (chave errada, rota fora do ar) como "não recebe".
+// Retorna { items, baseAntigaFalhou, baseNovaFalhou } — falha de UMA base
+// inteira é reportada separadamente, pra não virar um falso "não recebe".
 async function dd2FetchBolsaFamilia(cpf){
   const meses=dd2BolsaMeses();
-  const chamadas=[];
-  meses.forEach(anoMes=>{
-    chamadas.push(
-      fetch(dd2PortalUrl('bolsa-familia','codigo='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)})
-        .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-        .then(d=>Array.isArray(d)?d:[])
-    );
-    chamadas.push(
-      fetch(dd2PortalUrl('bolsa-familia-novo','nis='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)})
-        .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-        .then(d=>(Array.isArray(d)?d:[]).map(item=>({...item,_novo:true})))
-    );
-  });
-  const resultados=await Promise.allSettled(chamadas);
-  const sucesso=resultados.filter(r=>r.status==='fulfilled');
-  if(sucesso.length===0) throw new Error('Todas as consultas de Bolsa Família falharam');
-  return sucesso.flatMap(r=>r.value);
+  const chamar=(rota,params)=>fetch(dd2PortalUrl(rota,params),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)})
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(d=>Array.isArray(d)?d:[]);
+
+  const antigas=meses.map(anoMes=>chamar('bolsa-familia','codigo='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'));
+  const novas=meses.map(anoMes=>chamar('bolsa-familia-novo','nis='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1').then(d=>d.map(item=>({...item,_novo:true}))));
+
+  const [resAntigas,resNovas]=await Promise.all([Promise.allSettled(antigas),Promise.allSettled(novas)]);
+  const okAntigas=resAntigas.filter(r=>r.status==='fulfilled');
+  const okNovas=resNovas.filter(r=>r.status==='fulfilled');
+
+  if(okAntigas.length===0 && okNovas.length===0) throw new Error('Todas as consultas de Bolsa Família falharam');
+
+  return {
+    items:[...okAntigas.flatMap(r=>r.value), ...okNovas.flatMap(r=>r.value)],
+    baseAntigaFalhou: okAntigas.length===0,
+    baseNovaFalhou: okNovas.length===0,
+  };
 }
 
 function dd2RenderCadastral(d){
@@ -572,14 +589,18 @@ function dd2LinkManualBolsa(){
   return `<div class="dd2-links-ext"><a href="${DD2_BOLSA_MANUAL_URL}" target="_blank" class="dd2-link-ext">🔗 Consultar manualmente no Portal da Transparência</a></div>`;
 }
 
-function dd2RenderBolsaFamilia(data){
+function dd2RenderBolsaFamilia(res){
   const el=document.getElementById('dd2-bolsa-content');
-  if(!Array.isArray(data)){
+  if(!res || !Array.isArray(res.items)){
     el.innerHTML=`<p style="color:#ef4444;margin-bottom:10px">⚠️ Não foi possível consultar o Bolsa Família automaticamente no momento.</p>${dd2LinkManualBolsa()}`;
     return;
   }
-  if(!data.length){el.innerHTML=`<p style="color:#22c55e;font-weight:600;margin-bottom:10px">✅ Nenhuma parcela de Bolsa Família encontrada para este CPF.</p>${dd2LinkManualBolsa()}`;return;}
-  el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Programa</th><th>Mês Referência</th><th>UF</th><th>Município</th><th>NIS</th><th>Beneficiário</th><th>Valor</th></tr></thead>
+  const {items:data, baseAntigaFalhou, baseNovaFalhou}=res;
+  let avisos='';
+  if(baseAntigaFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base do Bolsa Família antigo — resultado pode estar incompleto.</p>';
+  if(baseNovaFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base do Novo Bolsa Família (atual) — resultado pode estar incompleto.</p>';
+  if(!data.length){el.innerHTML=`${avisos}<p style="color:#22c55e;font-weight:600;margin-bottom:10px">✅ Nenhuma parcela de Bolsa Família encontrada para este CPF.</p>${dd2LinkManualBolsa()}`;return;}
+  el.innerHTML=`${avisos}<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Programa</th><th>Mês Referência</th><th>UF</th><th>Município</th><th>NIS</th><th>Beneficiário</th><th>Valor</th></tr></thead>
   <tbody>${data.slice(0,50).map(p=>{
     const titular=p.titularBolsaFamilia||p.beneficiarioNovoBolsaFamilia;
     const valor=p.valor!=null?p.valor:p.valorSaque;
