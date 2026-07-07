@@ -113,14 +113,62 @@ function fbDrop(targetColId) {
                   .catch(() => setSaveIndicator('⚠️ Erro ao salvar na nuvem','var(--danger)'));
 }
 
+// ── Checklist interativo do modal (checkbox + texto por item) ──
+let _fbChecklistDraft = [];
+
+function fbRenderChecklistDraft() {
+  const wrap = document.getElementById('fb-checklist-items');
+  if(!wrap) return;
+  if(_fbChecklistDraft.length === 0) {
+    wrap.innerHTML = '<div style="font-size:.8rem;color:var(--text-muted)">Nenhuma tarefa ainda.</div>';
+    return;
+  }
+  wrap.innerHTML = _fbChecklistDraft.map((item, i) => `
+    <div style="display:flex;align-items:center;gap:8px">
+      <input type="checkbox" ${item.done?'checked':''} onchange="fbToggleChecklistDraftItem(${i})" style="width:17px;height:17px;flex-shrink:0;cursor:pointer"/>
+      <input type="text" value="${escapeHtml(item.text)}" oninput="fbUpdateChecklistDraftText(${i}, this.value)"
+        style="flex:1;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:.85rem;${item.done?'text-decoration:line-through;color:var(--text-muted)':''}"/>
+      <button type="button" class="btn btn-outline btn-sm" onclick="fbRemoveChecklistDraftItem(${i})" title="Remover">✕</button>
+    </div>
+  `).join('');
+}
+
+function fbAddChecklistItem() {
+  const input = document.getElementById('fb-check-new');
+  const text = input.value.trim();
+  if(!text) return;
+  _fbChecklistDraft.push({ text, done: false });
+  input.value = '';
+  fbRenderChecklistDraft();
+  input.focus();
+}
+
+function fbToggleChecklistDraftItem(idx) {
+  if(!_fbChecklistDraft[idx]) return;
+  _fbChecklistDraft[idx].done = !_fbChecklistDraft[idx].done;
+  fbRenderChecklistDraft();
+}
+
+function fbUpdateChecklistDraftText(idx, value) {
+  if(!_fbChecklistDraft[idx]) return;
+  _fbChecklistDraft[idx].text = value;
+}
+
+function fbRemoveChecklistDraftItem(idx) {
+  _fbChecklistDraft.splice(idx, 1);
+  fbRenderChecklistDraft();
+}
+
 function fbAddCard(colId) {
   const board = DB.fbBoards[fbCurrentView];
   document.getElementById('fb-modal-title').textContent = '📌 Novo Card';
   document.getElementById('fb-edit-id').value = '';
   document.getElementById('fb-edit-col').value = colId || board.cols[0]?.id || '';
-  ['fb-titulo','fb-desc','fb-check','fb-resp','fb-prazo','fb-tag'].forEach(id => document.getElementById(id).value = '');
+  ['fb-titulo','fb-desc','fb-resp','fb-prazo','fb-tag'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('fb-prio').value = 'Média';
   document.getElementById('fb-del-btn').style.display = 'none';
+  _fbChecklistDraft = [];
+  fbRenderChecklistDraft();
 
   // Populate col select
   const sel = document.getElementById('fb-col-sel');
@@ -140,12 +188,13 @@ function fbOpenCard(cardId, colId) {
   document.getElementById('fb-edit-col').value = colId;
   document.getElementById('fb-titulo').value = card.title;
   document.getElementById('fb-desc').value = card.desc||'';
-  document.getElementById('fb-check').value = (card.check||[]).join('\n');
   document.getElementById('fb-resp').value = card.resp||'';
   document.getElementById('fb-prazo').value = card.prazo||'';
   document.getElementById('fb-prio').value = card.prio||'Média';
   document.getElementById('fb-tag').value = card.tag||'';
   document.getElementById('fb-del-btn').style.display = 'inline-flex';
+  _fbChecklistDraft = (card.check||[]).map((t,i) => ({ text: t, done: !!(card.checkDone||[])[i] }));
+  fbRenderChecklistDraft();
 
   const sel = document.getElementById('fb-col-sel');
   sel.innerHTML = board.cols.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
@@ -161,12 +210,12 @@ function fbSaveCard() {
   const editId = document.getElementById('fb-edit-id').value;
   const oldColId = document.getElementById('fb-edit-col').value;
   const newColId = document.getElementById('fb-col-sel').value;
-  const checkLines = document.getElementById('fb-check').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  const checklistFinal = _fbChecklistDraft.filter(i => i.text.trim());
 
   const cardData = {
     title, desc: document.getElementById('fb-desc').value,
-    check: checkLines,
-    checkDone: checkLines.map(()=>0),
+    check: checklistFinal.map(i => i.text.trim()),
+    checkDone: checklistFinal.map(i => i.done ? 1 : 0),
     resp: document.getElementById('fb-resp').value,
     prazo: document.getElementById('fb-prazo').value,
     prio: document.getElementById('fb-prio').value,
@@ -178,13 +227,6 @@ function fbSaveCard() {
     const oldCol = board.cols.find(c => c.id === oldColId);
     const idx = oldCol?.cards.findIndex(c => c.id === editId);
     if(idx !== undefined && idx > -1) {
-      const existing = oldCol.cards[idx];
-      // preserve checkDone for existing tasks
-      const newCheckDone = checkLines.map((line, i) => {
-        const oldIdx = (existing.check||[]).indexOf(line);
-        return oldIdx > -1 ? (existing.checkDone||[])[oldIdx] || 0 : 0;
-      });
-      cardData.checkDone = newCheckDone;
       cardData.id = editId;
       if(oldColId === newColId) {
         oldCol.cards[idx] = cardData;
