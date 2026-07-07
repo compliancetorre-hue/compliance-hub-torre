@@ -1279,7 +1279,14 @@
       <div>
         <div class="field"><label>Título *</label><input type="text" id="fb-titulo" placeholder="Título do card"/></div>
         <div class="field"><label>Descrição</label><textarea id="fb-desc" placeholder="Descreva o item..."></textarea></div>
-        <div class="field"><label>Checklist (uma tarefa por linha)</label><textarea id="fb-check" placeholder="Verificar documentação&#10;Validar aprovação&#10;Registrar evidência"></textarea></div>
+        <div class="field">
+          <label>Checklist</label>
+          <div id="fb-checklist-items" style="display:flex;flex-direction:column;gap:5px;margin-bottom:7px"></div>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="fb-check-new" placeholder="Nova tarefa..." style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();fbAddChecklistItem();}"/>
+            <button type="button" class="btn btn-outline btn-sm" onclick="fbAddChecklistItem()">+ Adicionar</button>
+          </div>
+        </div>
       </div>
       <div>
         <div class="field"><label>Responsável</label><input type="text" id="fb-resp" placeholder="Nome"/></div>
