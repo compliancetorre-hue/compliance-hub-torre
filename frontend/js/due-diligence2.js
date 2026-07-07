@@ -67,8 +67,6 @@ function dd2HTML(){return `
 .dd2-badge.pep{background:#f3e8ff;color:#6b21a8}
 .dd2-badge.ativo{background:#dbeafe;color:#1e40af}
 .dd2-badge.passivo{background:#fee2e2;color:#991b1b}
-.dd2-filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.dd2-filter-bar select{padding:6px 10px;border-radius:6px;border:1px solid #e2e8f0;font-size:.82rem;font-family:inherit}
 .dd2-links-ext{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .dd2-link-ext{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:#f0f4f8;border:1px solid #e2e8f0;color:#0f2d4a;font-size:.78rem;text-decoration:none;transition:background .2s}
 .dd2-link-ext:hover{background:#e2e8f0}
@@ -89,7 +87,7 @@ function dd2HTML(){return `
 .dd2-chk-item.warn{border-left:4px solid #f59e0b}
 .dd2-chk-item.bad{border-left:4px solid #ef4444}
 @media(max-width:768px){.dd2-grid-3{grid-template-columns:1fr}.dd2-scope-grid{grid-template-columns:repeat(2,1fr)}.dd2-form-row{flex-direction:column}.dd2-score-section{flex-direction:column}}
-@media print{.dd2-search,.dd2-export-btns,.dd2-filter-bar{display:none!important}.dd2-card{break-inside:avoid;box-shadow:none}}
+@media print{.dd2-search,.dd2-export-btns{display:none!important}.dd2-card{break-inside:avoid;box-shadow:none}}
 </style>
 <div class="dd2-container">
   <div class="dd2-search">
@@ -180,13 +178,8 @@ function dd2HTML(){return `
       <div id="dd2-fiscal-content"><div class="dd2-loading">&#9203; Verificando situação fiscal...</div></div>
     </div>
     <div class="dd2-card" id="dd2-sec-judicial">
-      <div class="dd2-card-title">&#9878; Processos Judiciais (DataJud CNJ)</div>
-      <div class="dd2-filter-bar" id="dd2-judicial-filters" style="display:none">
-        <select id="dd2-f-tribunal" onchange="dd2FiltrarJudicial()"><option value="">Todos os Tribunais</option></select>
-        <select id="dd2-f-grau" onchange="dd2FiltrarJudicial()"><option value="">Todos os Graus</option></select>
-        <select id="dd2-f-polo" onchange="dd2FiltrarJudicial()"><option value="">Todos os Polos</option></select>
-      </div>
-      <div id="dd2-judicial-content"><div class="dd2-loading">&#9203; Consultando DataJud CNJ...</div></div>
+      <div class="dd2-card-title">&#9878; Processos Judiciais (DJEN — CNJ)</div>
+      <div id="dd2-judicial-content"><div class="dd2-loading">&#9203; Consultando o Diário de Justiça Eletrônico Nacional...</div></div>
     </div>
     <div class="dd2-card" id="dd2-sec-sancoes">
       <div class="dd2-card-title">&#128171; Sanções CEIS + CNEP</div>
@@ -221,15 +214,22 @@ function dd2HTML(){return `
 // DUE DILIGENCE 2 — JAVASCRIPT
 // ═══════════════════════════════════════════════════════
 
-// A chave da API do DataJud CNJ é pública (divulgada pelo próprio CNJ para
-// qualquer desenvolvedor), mas a chamada direta do navegador é bloqueada por
-// CORS pela api-publica.datajud.cnj.jus.br. Por isso passa pela Edge Function
-// também — mesmo caminho da chave pessoal do Portal da Transparência.
-//
 // A chave do Portal da Transparência é PESSOAL e NUNCA deve existir no
 // cliente (ficaria visível a qualquer visitante via "Ver código-fonte"). As
 // consultas passam pela Edge Function, que guarda as chaves como secrets do
-// lado do servidor — ver rotas /portal/:endpoint e /datajud/search no backend.
+// lado do servidor — ver rota /portal/:endpoint no backend.
+//
+// Processos Judiciais NÃO usa a API pública do DataJud CNJ: o índice público
+// do DataJud não expõe nome nem CPF/CNPJ das partes de um processo (só
+// metadados — número, classe, órgão julgador, movimentações), então nunca é
+// possível localizar processos de uma pessoa/empresa a partir do documento
+// por ali. Em vez disso, usamos o DJEN (Diário de Justiça Eletrônico
+// Nacional, comunicaapi.pje.jus.br) — API pública do CNJ que agrega
+// citações, intimações e editais de tribunais de todo o país e permite
+// buscar por nome da parte (nomeParte) ou por texto livre (útil pra achar o
+// CPF/CNPJ escrito no teor da comunicação). É pública, sem chave, com CORS
+// liberado — por isso é chamada direto do navegador, sem Edge Function.
+// Tem rate limit de 20 requisições por janela por IP (ver dd2FetchDJEN).
 function dd2PortalHeaders(){
   return { 'x-app-token': (typeof getAppToken==='function'?getAppToken():'') };
 }
@@ -302,22 +302,27 @@ async function dd2Iniciar(){
   },35000);
 
   try {
+  // cadastralPromise nunca rejeita (erros já tratados dentro) — permite que
+  // Judicial e PEP aguardem os dados cadastrais (nome + sócios) sem correr
+  // na frente da resposta da Receita Federal, como acontecia antes.
+  let cadastralPromise=Promise.resolve(null);
   if(scCad&&tipo==='cnpj'){
     dd2SetStep('cadastral','active');
-    tasks.push(
-      dd2BuscarCNPJ(doc)
+    cadastralPromise=dd2BuscarCNPJ(doc)
         .then(d=>{
           dd2CadastralData=d;
           dd2SetStep('cadastral','done');
           dd2SetProgress(20);
           dd2RenderCadastral(d);
           dd2RenderFiscal(d);
+          return d;
         }).catch(()=>{
           dd2SetStep('cadastral','error');
           dd2RenderCadastral(null);
           dd2RenderFiscal(null);
-        })
-    );
+          return null;
+        });
+    tasks.push(cadastralPromise);
   } else {
     dd2SetStep('cadastral','done');dd2SetProgress(20);
     document.getElementById('dd2-cadastral-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta cadastral disponível apenas para CNPJ.</p>';
@@ -326,9 +331,19 @@ async function dd2Iniciar(){
   if(scJud){
     dd2SetStep('judicial','active');
     tasks.push(
-      dd2FetchJudicial(doc).then(()=>{
-        dd2SetStep('judicial','done');dd2SetProgress(50);
-      }).catch(()=>{dd2SetStep('judicial','error');dd2RenderJudicial([]);})
+      cadastralPromise.then(cad=>{
+        const nome=cad?.razao||'';
+        const socios=cad?.socios||[];
+        return dd2BuscarProcessosDJEN(nome,doc,tipo,socios).then(res=>{
+          dd2JudicialData=res.items;
+          dd2RenderJudicial(res,nome,doc,tipo,socios);
+          dd2SetStep('judicial','done');dd2SetProgress(50);
+        });
+      }).catch(()=>{
+        dd2SetStep('judicial','error');
+        dd2JudicialData=[];
+        document.getElementById('dd2-judicial-content').innerHTML=`<p style="color:#ef4444;margin-bottom:10px">⚠️ Não foi possível consultar o DJEN automaticamente no momento.</p>${dd2LinksManuaisHTML(dd2CadastralData?.razao||'',doc,tipo,dd2CadastralData?.socios||[])}`;
+      })
     );
   } else {
     dd2SetStep('judicial','done');
@@ -353,10 +368,7 @@ async function dd2Iniciar(){
   if(scPep){
     dd2SetStep('pep','active');
     tasks.push(
-      (async()=>{
-        const nome=dd2CadastralData?.razao||'';
-        return dd2FetchPep(nome,tipo==='cpf'?doc:'');
-      })().then(d=>{
+      cadastralPromise.then(cad=>dd2FetchPep(cad?.razao||'',tipo==='cpf'?doc:'')).then(d=>{
         dd2PepData=d;dd2SetStep('pep','done');dd2SetProgress(78);
         dd2RenderPep(d);
       }).catch(()=>{dd2SetStep('pep','error');dd2RenderPep([]);})
@@ -429,16 +441,6 @@ async function dd2BuscarCNPJ(doc){
   const norm=ddNorm(found.data,found.api);
   if(!norm) throw new Error('Falha ao normalizar dados do CNPJ');
   return norm;
-}
-
-// Busca processos no DataJud CNJ (17 tribunais) via Edge Function —
-// evitamos a chamada direta do navegador, bloqueada por CORS pelo CNJ.
-async function dd2FetchJudicial(doc){
-  const r=await fetch(`${EDGE_URL}/datajud/search?codigo=${doc}`,{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(25000)});
-  if(!r.ok) throw new Error('Falha ao consultar DataJud CNJ');
-  const d=await r.json();
-  dd2JudicialData=Array.isArray(d)?d:[];
-  dd2RenderJudicial(dd2JudicialData);
 }
 
 async function dd2FetchPep(nome,cpf){
@@ -548,40 +550,99 @@ function dd2RenderFiscal(d){
   </tbody></table></div>`;
 }
 
-function dd2RenderJudicial(data){
-  const el=document.getElementById('dd2-judicial-content');
-  const filters=document.getElementById('dd2-judicial-filters');
-  if(!data.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhum processo encontrado nos tribunais consultados.</p>';return;}
-  filters.style.display='flex';
-  const tribunais=[...new Set(data.map(p=>p._tribunal||p.tribunal||'—'))].sort();
-  const graus=[...new Set(data.map(p=>p.grau||'—'))].filter(Boolean).sort();
-  const tSel=document.getElementById('dd2-f-tribunal');
-  const gSel=document.getElementById('dd2-f-grau');
-  tSel.innerHTML='<option value="">Todos os Tribunais ('+data.length+')</option>'+tribunais.map(t=>`<option>${t}</option>`).join('');
-  gSel.innerHTML='<option value="">Todos os Graus</option>'+graus.map(g=>`<option>${g}</option>`).join('');
-  dd2FiltrarJudicial();
+function dd2FmtDoc(docNum,tipo){
+  if(tipo==='cnpj')return docNum.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');
+  return docNum.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');
 }
 
-function dd2FiltrarJudicial(){
-  const tribunal=document.getElementById('dd2-f-tribunal')?.value||'';
-  const grau=document.getElementById('dd2-f-grau')?.value||'';
-  const polo=document.getElementById('dd2-f-polo')?.value||'';
-  let filtered=dd2JudicialData;
-  if(tribunal)filtered=filtered.filter(p=>(p._tribunal||p.tribunal||'')==tribunal);
-  if(grau)filtered=filtered.filter(p=>(p.grau||'')==grau);
+const DD2_DJEN_URL='https://comunicaapi.pje.jus.br/api/v1/comunicacao';
+
+// Chama o DJEN direto do navegador — API pública, sem chave, com CORS
+// liberado (ver nota no topo do arquivo). Rate limit: 20 requisições por
+// janela por IP; em caso de estouro a API responde 429.
+async function dd2FetchDJEN(params){
+  const qs=new URLSearchParams({itensPorPagina:'100',...params}).toString();
+  const r=await fetch(`${DD2_DJEN_URL}?${qs}`,{headers:{'Accept':'application/json'},signal:AbortSignal.timeout(15000)});
+  if(r.status===429) throw new Error('RATE_LIMIT');
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const d=await r.json();
+  return Array.isArray(d?.items)?d.items:[];
+}
+
+// Busca comunicações processuais (citação/intimação/edital) no DJEN: por
+// texto livre com o documento formatado (o teor costuma trazer o CPF/CNPJ
+// da parte por extenso) e, quando disponível, por nome da parte — inclusive
+// de cada sócio, no caso de CNPJ, pra cobrir os processos das pessoas
+// ligadas à empresa. Resultados de todas as buscas são mesclados e
+// deduplicados por id.
+async function dd2BuscarProcessosDJEN(nome,docNum,tipo,socios){
+  const docFmt=dd2FmtDoc(docNum,tipo);
+  const buscas=[{origem:'documento',p:dd2FetchDJEN({texto:docFmt})}];
+  if(nome) buscas.push({origem:'nome',p:dd2FetchDJEN({nomeParte:nome})});
+  (socios||[]).filter(s=>s.nome).slice(0,4).forEach(s=>{
+    buscas.push({origem:'sócio "'+s.nome+'"',p:dd2FetchDJEN({nomeParte:s.nome})});
+  });
+  const resultados=await Promise.allSettled(buscas.map(b=>b.p));
+  let rateLimited=false,algumaFalhou=false;
+  const porId=new Map();
+  resultados.forEach((res,i)=>{
+    if(res.status==='fulfilled'){
+      res.value.forEach(item=>{
+        if(!porId.has(item.id)) porId.set(item.id,{...item,_origem:[buscas[i].origem]});
+        else porId.get(item.id)._origem.push(buscas[i].origem);
+      });
+    } else {
+      algumaFalhou=true;
+      if(String(res.reason?.message).includes('RATE_LIMIT')) rateLimited=true;
+    }
+  });
+  const items=[...porId.values()].sort((a,b)=>(b.data_disponibilizacao||'').localeCompare(a.data_disponibilizacao||''));
+  return {items,rateLimited,algumaFalhou};
+}
+
+// Links de verificação manual, como reforço à busca automática do DJEN
+// (que não garante cobertura de 100% dos tribunais/processos). Quando é
+// uma consulta de CNPJ, inclui também um link por sócio listado no QSA.
+function dd2LinksManuaisHTML(nome,docNum,tipo,socios){
+  const docFmt=dd2FmtDoc(docNum,tipo);
+  const alvo=nome||docFmt;
+  const alvoSafe=escapeHtml(alvo);
+  const linksAlvo=[
+    {label:`JusBrasil — processos de "${alvoSafe}"`,url:`https://www.jusbrasil.com.br/consulta-processual/?q=${encodeURIComponent(alvo)}`},
+    {label:`JusBrasil — processos pelo documento ${docFmt}`,url:`https://www.jusbrasil.com.br/consulta-processual/?q=${docNum}`},
+    {label:'CNJ — Consulta Processual Nacional (PJe)',url:'https://www.cnj.jus.br/pjecnj/'},
+    {label:`Escavador — busca por "${alvoSafe}"`,url:`https://www.escavador.com/busca?q=${encodeURIComponent(alvo)}`},
+  ];
+  const linksSocios=(socios||[]).filter(s=>s.nome).slice(0,6).map(s=>({
+    label:`JusBrasil — sócio "${escapeHtml(s.nome)}"`,
+    url:`https://www.jusbrasil.com.br/consulta-processual/?q=${encodeURIComponent(s.nome)}`
+  }));
+  return `
+    <div style="font-size:.72rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Reforçar verificação manualmente</div>
+    <div class="dd2-links-ext">${linksAlvo.map(l=>`<a href="${l.url}" target="_blank" class="dd2-link-ext">🔗 ${l.label}</a>`).join('')}</div>
+    ${linksSocios.length?`<div style="font-size:.72rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin:10px 0 4px">Sócios / pessoas vinculadas ao CNPJ</div><div class="dd2-links-ext">${linksSocios.map(l=>`<a href="${l.url}" target="_blank" class="dd2-link-ext">🔗 ${l.label}</a>`).join('')}</div>`:''}
+  `;
+}
+
+const DD2_POLO_LABEL={A:'Ativo',P:'Passivo',T:'Terceiro',D:'Outro'};
+
+function dd2RenderJudicial(res,nome,docNum,tipo,socios){
   const el=document.getElementById('dd2-judicial-content');
-  if(!filtered.length){el.innerHTML='<p style="color:#64748b">Nenhum processo encontrado com os filtros selecionados.</p>';return;}
-  el.innerHTML=`<p style="font-size:.82rem;color:#64748b;margin-bottom:8px">Exibindo ${filtered.length} processo(s)</p>
-  <div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Número CNJ</th><th>Classe / Assunto</th><th>Tribunal</th><th>Grau</th><th>Últ. Atualização</th></tr></thead>
-  <tbody>${filtered.slice(0,100).map(p=>{
-    const num=p.numeroProcesso||p.numero||'—';
-    const classe=p.classe?.nome||p.classe||'—';
-    const assunto=(p.assuntos||[]).map(a=>a.nome||a).join(', ')||'—';
-    const trib=p._tribunal||p.tribunal||'—';
-    const grauP=p.grau||'—';
-    const upd=p.dataHoraUltimaAtualizacao||p.dataAjuizamento||'—';
-    return `<tr><td style="font-family:monospace;font-size:.75rem">${num}</td><td>${classe}<br><span style="font-size:.73rem;color:#64748b">${assunto}</span></td><td><span class="dd2-badge info">${trib}</span></td><td>${grauP}</td><td style="font-size:.75rem">${upd.substring(0,10)}</td></tr>`;
-  }).join('')}</tbody></table></div>`;
+  const {items,rateLimited,algumaFalhou}=res;
+  let avisos='';
+  if(rateLimited) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Limite de requisições do DJEN atingido — resultado pode estar incompleto. Tente novamente em cerca de 1 minuto.</p>';
+  else if(algumaFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais buscas no DJEN falharam — resultado pode estar incompleto.</p>';
+  const tabela=items.length?`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Data</th><th>Tribunal</th><th>Tipo</th><th>Classe / Processo</th><th>Encontrado por</th></tr></thead>
+  <tbody>${items.slice(0,60).map(p=>{
+    const dest=(p.destinatarios||[]).map(d=>`${escapeHtml(d.nome)} (${DD2_POLO_LABEL[d.polo]||'—'})`).join(', ')||'—';
+    return `<tr><td style="font-size:.75rem">${escapeHtml(p.data_disponibilizacao)||'—'}</td><td><span class="dd2-badge info">${escapeHtml(p.siglaTribunal)}</span></td><td>${escapeHtml(p.tipoComunicacao)||'—'}</td><td>${escapeHtml(p.nomeClasse)||'—'}<br><span style="font-size:.73rem;color:#64748b">${escapeHtml(p.numeroprocessocommascara||p.numero_processo)||'—'} — ${dest}</span></td><td style="font-size:.75rem">${p._origem.map(o=>escapeHtml(o)).join(', ')}</td></tr>`;
+  }).join('')}</tbody></table></div>`:`<p style="color:#22c55e;font-weight:600">✅ Nenhuma comunicação processual encontrada no DJEN.</p>`;
+  el.innerHTML=`
+    ${avisos}
+    <p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>DJEN — Diário de Justiça Eletrônico Nacional</strong> (CNJ): citações, intimações e editais de tribunais de todo o país. A cobertura não é de 100% dos tribunais/processos — use os links abaixo para reforçar a verificação.</p>
+    ${tabela}
+    <div style="margin-top:14px">${dd2LinksManuaisHTML(nome,docNum,tipo,socios)}</div>
+  `;
 }
 
 function dd2RenderSancoes(d){
@@ -661,16 +722,16 @@ function dd2RenderScore(){
   else if(score<60){gauge.className='dd2-gauge-circle medium';label.textContent='RISCO MÉDIO';label.style.color='#f59e0b';}
   else{gauge.className='dd2-gauge-circle high';label.textContent='RISCO ALTO';label.style.color='#ef4444';}
   const pillars=[
-    {icon:'&#127963;',label:'Cadastral',ok:!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR')},
-    {icon:'&#9878;',label:'Judicial',ok:dd2JudicialData.length===0},
-    {icon:'&#128171;',label:'Sanções',ok:sanTotal===0},
-    {icon:'&#127963;',label:'PEP',ok:dd2PepData.length===0},
-    {icon:'&#128240;',label:'Mídia',ok:dd2MidiaData.length===0}
+    {icon:'&#127963;',label:'Cadastral',cls:(!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'))?'ok':'bad',txt:null},
+    {icon:'&#9878;',label:'Judicial',cls:dd2JudicialData.length===0?'ok':'bad',txt:null},
+    {icon:'&#128171;',label:'Sanções',cls:sanTotal===0?'ok':'bad',txt:null},
+    {icon:'&#127963;',label:'PEP',cls:dd2PepData.length===0?'ok':'bad',txt:null},
+    {icon:'&#128240;',label:'Mídia',cls:dd2MidiaData.length===0?'ok':'bad',txt:null}
   ];
   pillarsEl.innerHTML=pillars.map(p=>`<div class="dd2-pillar">
     <div class="dd2-pillar-icon">${p.icon}</div>
     <div class="dd2-pillar-label">${p.label}</div>
-    <div class="dd2-pillar-status ${p.ok?'ok':'bad'}">${p.ok?'OK':'Atenção'}</div>
+    <div class="dd2-pillar-status ${p.cls}">${p.txt||(p.cls==='ok'?'OK':'Atenção')}</div>
   </div>`).join('');
 }
 
@@ -682,8 +743,7 @@ function dd2RenderTimeline(){
     events.push({date:d.abertura,text:'Empresa aberta',sub:'Receita Federal',cls:'ok'});
   }
   dd2JudicialData.slice(0,5).forEach(p=>{
-    const dt=(p.dataAjuizamento||p.dataHoraUltimaAtualizacao||'').substring(0,10);
-    if(dt)events.push({date:dt,text:'Processo: '+(p.classe?.nome||p.classe||'Processo judicial'),sub:p._tribunal||p.tribunal||'DataJud',cls:'warn'});
+    if(p.data_disponibilizacao)events.push({date:p.data_disponibilizacao,text:(p.tipoComunicacao||'Comunicação')+': '+(p.nomeClasse||p.numeroprocessocommascara||'Processo judicial'),sub:p.siglaTribunal||'DJEN',cls:'warn'});
   });
   (dd2SancoesData?.ceis||[]).slice(0,3).forEach(s=>{
     if(s.dataInicioSancao)events.push({date:s.dataInicioSancao,text:'Sanção CEIS',sub:s.orgaoSancionador?.nome||'CEIS',cls:'danger'});
@@ -703,18 +763,18 @@ function dd2RenderChecklist(){
   const sit=d?.situacao||'';
   const sanTotal=(dd2SancoesData?.ceis||[]).length+(dd2SancoesData?.cnep||[]).length;
   const items=[
-    {ok:!!d,label:'Dados cadastrais obtidos',icon:'&#127963;'},
-    {ok:!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'),label:'Situação cadastral regular',icon:'&#128188;'},
-    {ok:dd2JudicialData.length===0,label:'Sem processos judiciais',icon:'&#9878;'},
-    {ok:sanTotal===0,label:'Sem sanções CEIS/CNEP',icon:'&#128171;'},
-    {ok:dd2PepData.length===0,label:'Sem registro PEP',icon:'&#127963;'},
-    {ok:dd2MidiaData.length===0,label:'Sem notícias negativas',icon:'&#128240;'}
+    {state:d?'ok':'bad',label:'Dados cadastrais obtidos',icon:'&#127963;'},
+    {state:(!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'))?'ok':'bad',label:'Situação cadastral regular',icon:'&#128188;'},
+    {state:dd2JudicialData.length===0?'ok':'bad',label:dd2JudicialData.length?`${dd2JudicialData.length} comunicação(ões) processual(is) encontrada(s) no DJEN`:'Sem comunicações processuais no DJEN',icon:'&#9878;'},
+    {state:sanTotal===0?'ok':'bad',label:'Sem sanções CEIS/CNEP',icon:'&#128171;'},
+    {state:dd2PepData.length===0?'ok':'bad',label:'Sem registro PEP',icon:'&#127963;'},
+    {state:dd2MidiaData.length===0?'ok':'bad',label:'Sem notícias negativas',icon:'&#128240;'}
   ];
   if(document.getElementById('dd2-tipo').value==='cpf'){
-    items.push({ok:dd2BolsaData.length===0,label:dd2BolsaData.length?`Recebe Bolsa Família (${dd2BolsaData.length} parcela(s))`:'Não recebe Bolsa Família',icon:'&#128176;'});
+    items.push({state:dd2BolsaData.length===0?'ok':'bad',label:dd2BolsaData.length?`Recebe Bolsa Família (${dd2BolsaData.length} parcela(s))`:'Não recebe Bolsa Família',icon:'&#128176;'});
   }
-  el.innerHTML=items.map(i=>`<div class="dd2-chk-item ${i.ok?'ok':'bad'}">
-    <span>${i.ok?'&#9989;':'&#10060;'}</span>
+  el.innerHTML=items.map(i=>`<div class="dd2-chk-item ${i.state}">
+    <span>${i.state==='ok'?'&#9989;':i.state==='warn'?'&#9888;&#65039;':'&#10060;'}</span>
     <span>${i.icon} ${i.label}</span>
   </div>`).join('');
 }
