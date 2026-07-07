@@ -455,17 +455,31 @@ function dd2BolsaMeses(){
   }
   return meses;
 }
+// Consulta as DUAS bases: o Bolsa Família antigo (descontinuado em 2021) e o
+// Novo Bolsa Família (programa atual, desde 2023) — um pagamento recente só
+// aparece na segunda base, então checamos as duas pra não perder nenhuma.
+// Uma chamada isolada falhar não derruba a consulta toda (rede instável, um
+// mês sem dados etc.) — só se TODAS falharem é que reportamos erro de verdade,
+// pra não mascarar uma falha real (chave errada, rota fora do ar) como "não recebe".
 async function dd2FetchBolsaFamilia(cpf){
   const meses=dd2BolsaMeses();
-  const respostas=await Promise.all(meses.map(async anoMes=>{
-    const r=await fetch(dd2PortalUrl('bolsa-familia','codigo='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'),{
-      headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)
-    });
-    if(!r.ok) throw new Error('Falha ao consultar Bolsa Família ('+anoMes+')');
-    const d=await r.json();
-    return Array.isArray(d)?d:[];
-  }));
-  return respostas.flat();
+  const chamadas=[];
+  meses.forEach(anoMes=>{
+    chamadas.push(
+      fetch(dd2PortalUrl('bolsa-familia','codigo='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)})
+        .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+        .then(d=>Array.isArray(d)?d:[])
+    );
+    chamadas.push(
+      fetch(dd2PortalUrl('bolsa-familia-novo','nis='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)})
+        .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+        .then(d=>(Array.isArray(d)?d:[]).map(item=>({...item,_novo:true})))
+    );
+  });
+  const resultados=await Promise.allSettled(chamadas);
+  const sucesso=resultados.filter(r=>r.status==='fulfilled');
+  if(sucesso.length===0) throw new Error('Todas as consultas de Bolsa Família falharam');
+  return sucesso.flatMap(r=>r.value);
 }
 
 function dd2RenderCadastral(d){
@@ -565,15 +579,19 @@ function dd2RenderBolsaFamilia(data){
     return;
   }
   if(!data.length){el.innerHTML=`<p style="color:#22c55e;font-weight:600;margin-bottom:10px">✅ Nenhuma parcela de Bolsa Família encontrada para este CPF.</p>${dd2LinkManualBolsa()}`;return;}
-  el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Mês Referência</th><th>UF</th><th>Município</th><th>NIS</th><th>Beneficiário</th><th>Valor</th></tr></thead>
-  <tbody>${data.slice(0,50).map(p=>`<tr>
+  el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Programa</th><th>Mês Referência</th><th>UF</th><th>Município</th><th>NIS</th><th>Beneficiário</th><th>Valor</th></tr></thead>
+  <tbody>${data.slice(0,50).map(p=>{
+    const titular=p.titularBolsaFamilia||p.beneficiarioNovoBolsaFamilia;
+    const valor=p.valor!=null?p.valor:p.valorSaque;
+    return `<tr>
+    <td><span class="dd2-badge ${p._novo?'info':'warn'}">${p._novo?'Novo Bolsa Família':'Bolsa Família (antigo)'}</span></td>
     <td>${escapeHtml(p.dataMesReferencia||p.dataMesCompetencia)||'—'}</td>
     <td>${escapeHtml(p.municipio?.uf?.sigla)||'—'}</td>
     <td>${escapeHtml(p.municipio?.nomeIBGE)||'—'}</td>
-    <td>${escapeHtml(p.titularBolsaFamilia?.nis)||'—'}</td>
-    <td>${escapeHtml(p.titularBolsaFamilia?.nome)||'—'}</td>
-    <td>${p.valor!=null?'R$ '+Number(p.valor).toLocaleString('pt-BR',{minimumFractionDigits:2}):'—'}</td>
-  </tr>`).join('')}</tbody></table></div>
+    <td>${escapeHtml(titular?.nis)||'—'}</td>
+    <td>${escapeHtml(titular?.nome)||'—'}</td>
+    <td>${valor!=null?'R$ '+Number(valor).toLocaleString('pt-BR',{minimumFractionDigits:2}):'—'}</td>
+  </tr>`;}).join('')}</tbody></table></div>
   ${dd2LinkManualBolsa()}`;
 }
 
