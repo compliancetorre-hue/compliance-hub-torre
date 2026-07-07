@@ -1,3 +1,21 @@
+// Linha de responsável — destacada (nome + telefone) quando preenchida
+function _filialRespRow(label, icone, nome, tel) {
+  const preenchido = !!(nome && nome.trim());
+  if(!preenchido) {
+    return `<div style="display:flex;align-items:center;gap:7px;padding:4px 0;font-size:.76rem;color:var(--text-muted)">
+      <span style="width:18px;text-align:center;opacity:.5">${icone}</span>
+      <span><strong>${label}:</strong> não informado</span>
+    </div>`;
+  }
+  return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;margin-bottom:4px;background:rgba(0,196,154,.08);border:1px solid rgba(0,196,154,.25);border-radius:8px">
+    <span style="width:18px;text-align:center;font-size:.95rem">${icone}</span>
+    <div style="font-size:.8rem;line-height:1.35">
+      <div><strong>${label}:</strong> ${escapeHtml(nome)}</div>
+      ${tel ? `<div style="color:var(--text-muted);font-size:.74rem">📞 ${escapeHtml(tel)}</div>` : ''}
+    </div>
+  </div>`;
+}
+
 function renderFiliais() {
   const q = document.getElementById('filtro-filial').value.toLowerCase();
   const grid = document.getElementById('filiais-grid');
@@ -19,7 +37,11 @@ function renderFiliais() {
           <div style="font-size:.76rem;color:var(--text-muted)">${f.cidade} · ${f.cnpj}</div>
         </div>
       </div>
-      <div style="font-size:.8rem;margin-bottom:10px"><strong>Resp. Regional, Gerente e Sub. :</strong> ${f.resp}</div>
+      <div style="margin-bottom:10px">
+        ${_filialRespRow('Resp. Regional', '🧭', f.resp, f.respTel)}
+        ${_filialRespRow('Gerente', '👔', f.gerente, f.gerenteTel)}
+        ${_filialRespRow('Sub.', '🧑‍💼', f.sub, f.subTel)}
+      </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
         ${setoresArr.map(s=>`<span style="background:#f0f4f8;border-radius:20px;padding:2px 10px;font-size:.73rem;font-weight:600;color:var(--text-muted)">${s}</span>`).join('')}
       </div>
@@ -50,6 +72,11 @@ function openModalFilial(id) {
   document.getElementById('f-filial-cnpj').value = '';
   document.getElementById('f-filial-cidade').value = '';
   document.getElementById('f-filial-resp').value = '';
+  document.getElementById('f-filial-resp-tel').value = '';
+  document.getElementById('f-filial-gerente').value = '';
+  document.getElementById('f-filial-gerente-tel').value = '';
+  document.getElementById('f-filial-sub').value = '';
+  document.getElementById('f-filial-sub-tel').value = '';
   document.getElementById('f-filial-setores').value = '';
   openModal('modal-filial');
 }
@@ -61,6 +88,11 @@ function editFilial(id) {
   document.getElementById('f-filial-cnpj').value = f.cnpj;
   document.getElementById('f-filial-cidade').value = f.cidade;
   document.getElementById('f-filial-resp').value = f.resp;
+  document.getElementById('f-filial-resp-tel').value = f.respTel||'';
+  document.getElementById('f-filial-gerente').value = f.gerente||'';
+  document.getElementById('f-filial-gerente-tel').value = f.gerenteTel||'';
+  document.getElementById('f-filial-sub').value = f.sub||'';
+  document.getElementById('f-filial-sub-tel').value = f.subTel||'';
   document.getElementById('f-filial-setores').value = f.setores;
   document.getElementById('f-filial-setor').value = f.setor;
   openModal('modal-filial');
@@ -71,25 +103,24 @@ function editFilial(id) {
 function salvarFilial() {
   const nome = document.getElementById('f-filial-nome').value.trim();
   if(!nome) { alert('Informe o nome da filial.'); return; }
+  const campos = {
+    nome, cnpj: document.getElementById('f-filial-cnpj').value,
+    cidade: document.getElementById('f-filial-cidade').value,
+    resp: document.getElementById('f-filial-resp').value,
+    respTel: document.getElementById('f-filial-resp-tel').value,
+    gerente: document.getElementById('f-filial-gerente').value,
+    gerenteTel: document.getElementById('f-filial-gerente-tel').value,
+    sub: document.getElementById('f-filial-sub').value,
+    subTel: document.getElementById('f-filial-sub-tel').value,
+    setor: document.getElementById('f-filial-setor').value,
+    setores: document.getElementById('f-filial-setores').value
+  };
   if(window._editFilialId) {
     const f = DB.filiais.find(x => x.id === window._editFilialId);
-    if(f) {
-      f.nome = nome; f.cnpj = document.getElementById('f-filial-cnpj').value;
-      f.cidade = document.getElementById('f-filial-cidade').value;
-      f.resp = document.getElementById('f-filial-resp').value;
-      f.setor = document.getElementById('f-filial-setor').value;
-      f.setores = document.getElementById('f-filial-setores').value;
-    }
+    if(f) Object.assign(f, campos);
     window._editFilialId = null;
   } else {
-    DB.filiais.push({
-      id: DB._ids.filial++,
-      nome, cnpj: document.getElementById('f-filial-cnpj').value,
-      cidade: document.getElementById('f-filial-cidade').value,
-      resp: document.getElementById('f-filial-resp').value,
-      setor: document.getElementById('f-filial-setor').value,
-      setores: document.getElementById('f-filial-setores').value
-    });
+    DB.filiais.push({ id: DB._ids.filial++, ...campos });
   }
   closeModal('modal-filial');
   populateFilialSelects();
