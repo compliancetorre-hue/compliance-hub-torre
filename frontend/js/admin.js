@@ -1093,6 +1093,29 @@ function adminReset() {
 }
 
 // ════════════════════════════════════════════════════
+// PAINEL DE FERRAMENTAS ADMIN — retrátil
+// ════════════════════════════════════════════════════
+const ADMIN_TOOLS_KEY = 'ch_admin_tools_collapsed';
+
+function toggleAdminToolsPanel() {
+  const content = document.getElementById('admin-tools-content');
+  const arrow = document.getElementById('admin-tools-arrow');
+  if(!content) return;
+  const collapsed = content.classList.toggle('collapsed');
+  if(arrow) arrow.classList.toggle('open', !collapsed);
+  localStorage.setItem(ADMIN_TOOLS_KEY, collapsed ? '1' : '0');
+}
+
+(function initAdminToolsPanel() {
+  const content = document.getElementById('admin-tools-content');
+  const arrow = document.getElementById('admin-tools-arrow');
+  if(!content) return;
+  const collapsed = localStorage.getItem(ADMIN_TOOLS_KEY) !== '0'; // padrão: recolhido
+  content.classList.toggle('collapsed', collapsed);
+  if(arrow) arrow.classList.toggle('open', !collapsed);
+})();
+
+// ════════════════════════════════════════════════════
 // MODO DE EDIÇÃO — editar textos da interface (menus, títulos, KPIs)
 // Somente admin. Os textos ficam em settings.ui_text_overrides e
 // valem para todo mundo que acessa o sistema (carregados em loadFromSupabase).
