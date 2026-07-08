@@ -95,7 +95,7 @@ function dd2HTML(){return `
     <div class="dd2-form-row">
       <div class="dd2-form-group">
         <label>Tipo</label>
-        <select id="dd2-tipo" onchange="dd2FormatDoc(document.getElementById('dd2-doc'))">
+        <select id="dd2-tipo" onchange="dd2OnTipoChange()">
           <option value="cnpj">&#127970; CNPJ</option>
           <option value="cpf">&#128100; CPF</option>
         </select>
@@ -103,6 +103,10 @@ function dd2HTML(){return `
       <div class="dd2-form-group" style="flex:1;min-width:200px">
         <label>Documento</label>
         <input type="text" id="dd2-doc" placeholder="00.000.000/0001-00" maxlength="18" oninput="dd2FormatDoc(this)"/>
+      </div>
+      <div class="dd2-form-group" id="dd2-nome-group" style="flex:1;min-width:200px;display:none">
+        <label>Nome completo (opcional)</label>
+        <input type="text" id="dd2-nome" placeholder="Ex: Maria da Silva Souza"/>
       </div>
       <div class="dd2-form-group" style="max-width:180px">
         <label>Nível</label>
@@ -262,6 +266,16 @@ function dd2FormatDoc(input){
   input.value=v;
 }
 
+// Mostra o campo "Nome completo" só para CPF — não existe API pública que
+// faça CPF→nome (LGPD), então sem esse campo a busca de processos (DJEN) e
+// de mídia negativa fica restrita a casar o CPF cru no texto livre, o que
+// tem cobertura bem menor que buscar pelo nome da parte.
+function dd2OnTipoChange(){
+  dd2FormatDoc(document.getElementById('dd2-doc'));
+  const grp=document.getElementById('dd2-nome-group');
+  if(grp) grp.style.display=document.getElementById('dd2-tipo').value==='cpf'?'flex':'none';
+}
+
 function dd2SetStep(id,state){
   const el=document.getElementById('dd2-step-'+id);
   if(!el)return;
@@ -277,6 +291,8 @@ async function dd2Iniciar(){
   const doc=document.getElementById('dd2-doc').value.replace(/\D/g,'');
   const tipo=document.getElementById('dd2-tipo').value;
   if(doc.length<11){alert('Informe um documento válido.');return;}
+  // Só relevante pra CPF — pra CNPJ a razão social já vem da Receita Federal.
+  const nomeManual=tipo==='cpf'?(document.getElementById('dd2-nome')?.value||'').trim():'';
   const scCad=document.getElementById('dd2-sc-cadastral').checked;
   const scFis=document.getElementById('dd2-sc-fiscal').checked;
   const scJud=document.getElementById('dd2-sc-judicial').checked;
@@ -332,7 +348,7 @@ async function dd2Iniciar(){
     dd2SetStep('judicial','active');
     tasks.push(
       cadastralPromise.then(cad=>{
-        const nome=cad?.razao||'';
+        const nome=cad?.razao||nomeManual||'';
         const socios=cad?.socios||[];
         return dd2BuscarProcessosDJEN(nome,doc,tipo,socios).then(res=>{
           dd2JudicialData=res.items;
@@ -342,7 +358,7 @@ async function dd2Iniciar(){
       }).catch(()=>{
         dd2SetStep('judicial','error');
         dd2JudicialData=[];
-        document.getElementById('dd2-judicial-content').innerHTML=`<p style="color:#ef4444;margin-bottom:10px">⚠️ Não foi possível consultar o DJEN automaticamente no momento.</p>${dd2LinksManuaisHTML(dd2CadastralData?.razao||'',doc,tipo,dd2CadastralData?.socios||[])}`;
+        document.getElementById('dd2-judicial-content').innerHTML=`<p style="color:#ef4444;margin-bottom:10px">⚠️ Não foi possível consultar o DJEN automaticamente no momento.</p>${dd2LinksManuaisHTML(dd2CadastralData?.razao||nomeManual||'',doc,tipo,dd2CadastralData?.socios||[])}`;
       })
     );
   } else {
@@ -380,8 +396,8 @@ async function dd2Iniciar(){
   if(scMid){
     dd2SetStep('midia','active');
     tasks.push(
-      (async()=>{
-        const nome=dd2CadastralData?.razao||doc;
+      cadastralPromise.then(cad=>{
+        const nome=cad?.razao||nomeManual||doc;
         return fetch('https://corsproxy.io/?url='+encodeURIComponent('https://api.duckduckgo.com/?q='+encodeURIComponent(nome+' corrupção fraude escândalo')+'&format=json&no_html=1&skip_disambig=1'),{signal:AbortSignal.timeout(10000)})
           .then(r=>r.ok?r.json():null)
           .then(d=>{
@@ -389,7 +405,7 @@ async function dd2Iniciar(){
             dd2MidiaData=items;dd2SetStep('midia','done');dd2SetProgress(88);
             dd2RenderMidia(dd2MidiaData);
           });
-      })().catch(()=>{dd2SetStep('midia','error');dd2RenderMidia([]);})
+      }).catch(()=>{dd2SetStep('midia','error');dd2RenderMidia([]);})
     );
   } else { dd2SetStep('midia','done'); }
   if(scBolsa&&tipo==='cpf'){
