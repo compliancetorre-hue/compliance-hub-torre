@@ -245,6 +245,7 @@ let dd2JudicialData = [];
 let dd2CadastralData = null;
 let dd2SancoesData = {ceis:[],cnep:[]};
 let dd2PepData = [];
+let dd2PepFalhou = false;
 let dd2MidiaData = [];
 let dd2MidiaFalhou = false;
 let dd2BolsaData = [];
@@ -306,7 +307,7 @@ async function dd2Iniciar(){
   document.getElementById('dd2-sec-midia').style.display=scMid?'block':'none';
   document.getElementById('dd2-sec-bolsa').style.display=scBolsa?'block':'none';
   dd2SetProgress(5);
-  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[]};dd2PepData=[];dd2MidiaData=[];dd2MidiaFalhou=false;dd2BolsaData=[];
+  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[]};dd2PepData=[];dd2PepFalhou=false;dd2MidiaData=[];dd2MidiaFalhou=false;dd2BolsaData=[];
   const tasks=[];
 
   // Failsafe: se alguma chamada travar inesperadamente, libera a tela mesmo assim
@@ -369,14 +370,20 @@ async function dd2Iniciar(){
   if(scSan){
     dd2SetStep('sancoes','active');
     tasks.push(
-      Promise.all([
-        fetch(dd2PortalUrl('ceis','codigoSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():[]).catch(()=>[]),
-        fetch(dd2PortalUrl('cnep','codigoSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():[]).catch(()=>[])
-      ]).then(([ceis,cnep])=>{
-        dd2SancoesData={ceis:Array.isArray(ceis)?ceis:[],cnep:Array.isArray(cnep)?cnep:[]};
-        dd2SetStep('sancoes','done');dd2SetProgress(65);
+      // allSettled (em vez de all) pra que a falha de UMA base não mascare
+      // o resultado real da outra — mesmo cuidado do Bolsa Família, ver
+      // dd2FetchBolsaFamilia. Um HTTP não-OK agora vira rejeição explícita,
+      // não um "[]" silencioso que se confunde com "nenhuma sanção".
+      Promise.allSettled([
+        fetch(dd2PortalUrl('ceis','codigoSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}),
+        fetch(dd2PortalUrl('cnep','codigoSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+      ]).then(([ceisRes,cnepRes])=>{
+        const ceis=ceisRes.status==='fulfilled'&&Array.isArray(ceisRes.value)?ceisRes.value:[];
+        const cnep=cnepRes.status==='fulfilled'&&Array.isArray(cnepRes.value)?cnepRes.value:[];
+        dd2SancoesData={ceis,cnep,ceisFalhou:ceisRes.status==='rejected',cnepFalhou:cnepRes.status==='rejected'};
+        dd2SetStep('sancoes',(ceisRes.status==='rejected'&&cnepRes.status==='rejected')?'error':'done');dd2SetProgress(65);
         dd2RenderSancoes(dd2SancoesData);
-      }).catch(()=>{dd2SetStep('sancoes','error');dd2RenderSancoes({ceis:[],cnep:[]});})
+      })
     );
   } else {
     dd2SetStep('sancoes','done');
@@ -386,9 +393,9 @@ async function dd2Iniciar(){
     dd2SetStep('pep','active');
     tasks.push(
       cadastralPromise.then(cad=>dd2FetchPep(cad?.razao||'',tipo==='cpf'?doc:'')).then(d=>{
-        dd2PepData=d;dd2SetStep('pep','done');dd2SetProgress(78);
-        dd2RenderPep(d);
-      }).catch(()=>{dd2SetStep('pep','error');dd2RenderPep([]);})
+        dd2PepData=d;dd2PepFalhou=false;dd2SetStep('pep','done');dd2SetProgress(78);
+        dd2RenderPep(d,false);
+      }).catch(()=>{dd2SetStep('pep','error');dd2PepData=[];dd2PepFalhou=true;dd2RenderPep([],true);})
     );
   } else {
     dd2SetStep('pep','done');
@@ -467,7 +474,10 @@ async function dd2FetchPep(nome,cpf){
   // Busca exata por CPF quando disponível (muito mais precisa que por nome)
   const qs=cpf?('cpf='+cpf):('nome='+encodeURIComponent(nome.split(' ').slice(0,3).join(' ')));
   const r=await fetch(dd2PortalUrl('peps',qs+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)});
-  if(!r.ok)return[];
+  // Lança em vez de devolver [] silenciosamente — um HTTP de erro (ex.: 401
+  // de token expirado) não pode virar "não é PEP" na tela, senão o score de
+  // risco nunca reflete uma falha real de verificação.
+  if(!r.ok)throw new Error('HTTP '+r.status);
   const d=await r.json();
   return Array.isArray(d)?d:[];
 }
@@ -668,14 +678,20 @@ function dd2RenderSancoes(d){
   const el=document.getElementById('dd2-sancoes-content');
   const ceis=d?.ceis||[];
   const cnep=d?.cnep||[];
+  const falhouTudo=!!(d?.ceisFalhou&&d?.cnepFalhou);
+  if(falhouTudo){el.innerHTML='<p style="color:#ef4444;font-weight:600">⚠️ Não foi possível consultar as bases CEIS e CNEP automaticamente no momento.</p>';return;}
+  let avisos='';
+  if(d?.ceisFalhou) avisos='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CEIS — resultado pode estar incompleto.</p>';
+  else if(d?.cnepFalhou) avisos='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CNEP — resultado pode estar incompleto.</p>';
   const all=[...ceis.map(s=>({...s,_base:'CEIS'})),...cnep.map(s=>({...s,_base:'CNEP'}))];
-  if(!all.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhuma sanção encontrada nas bases CEIS/CNEP.</p>';return;}
-  el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Base</th><th>Tipo de Sanção</th><th>Órgão Sancionador</th><th>Vigência</th><th>Status</th></tr></thead>
+  if(!all.length){el.innerHTML=avisos+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma sanção encontrada nas bases CEIS/CNEP.</p>';return;}
+  el.innerHTML=avisos+`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Base</th><th>Tipo de Sanção</th><th>Órgão Sancionador</th><th>Vigência</th><th>Status</th></tr></thead>
   <tbody>${all.map(s=>`<tr><td><span class="dd2-badge danger">${s._base}</span></td><td>${escapeHtml(s.tipoSancao?.descricaoPortal||s.tipoSancao?.descricaoResumida)||'—'}</td><td>${escapeHtml(s.orgaoSancionador?.nome)||'—'}</td><td>${escapeHtml(s.dataInicioSancao)||'—'} – ${escapeHtml(s.dataFimSancao)||'vigente'}</td><td><span class="dd2-badge ${s.dataFimSancao?'warn':'danger'}">${s.dataFimSancao?'Encerrada':'Vigente'}</span></td></tr>`).join('')}</tbody></table></div>`;
 }
 
-function dd2RenderPep(data){
+function dd2RenderPep(data,falhou){
   const el=document.getElementById('dd2-pep-content');
+  if(falhou){el.innerHTML='<p style="color:#ef4444;font-weight:600">⚠️ Não foi possível consultar a base de PEPs automaticamente no momento.</p>';return;}
   if(!Array.isArray(data)||!data.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhum registro PEP encontrado.</p>';return;}
   el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Nome</th><th>Cargo / Função</th><th>Órgão</th><th>Período</th><th>Status</th></tr></thead>
   <tbody>${data.slice(0,50).map(p=>`<tr><td>${escapeHtml(p.nome)||'—'}</td><td>${escapeHtml(p.descricao_funcao)||'—'}</td><td>${escapeHtml(p.nome_orgao)||'—'}</td><td>${escapeHtml(p.dt_inicio_exercicio)||'—'} – ${escapeHtml(p.dt_fim_exercicio)||'atual'}</td><td><span class="dd2-badge pep">&#9888; PEP</span></td></tr>`).join('')}</tbody></table></div>`;
@@ -817,9 +833,29 @@ function dd2RenderScore(){
   const d=dd2CadastralData;
   const sit=d?.situacao||'';
   if(sit&&!sit.toUpperCase().includes('ATIVA')&&!sit.toUpperCase().includes('REGULAR'))score+=30;
+
+  // Sanções/PEP/Mídia só somam pontos quando a consulta de fato rodou — uma
+  // falha de rede/autenticação vira "não verificado" (ver pillars abaixo),
+  // não "0 = limpo". Sem essa distinção, uma consulta que falhar em
+  // silêncio (ex.: 401 do token) zera o score mesmo sem checar nada.
+  const sancoesFalhouTudo=!!(dd2SancoesData?.ceisFalhou&&dd2SancoesData?.cnepFalhou);
   const sanTotal=(dd2SancoesData?.ceis||[]).length+(dd2SancoesData?.cnep||[]).length;
   if(sanTotal>0)score=Math.min(100,score+40);
-  if(dd2PepData.length>0)score=Math.min(100,score+20);
+
+  if(!dd2PepFalhou&&dd2PepData.length>0)score=Math.min(100,score+20);
+
+  // Processos judiciais (DJEN) e mídia negativa antes não entravam no
+  // score — por isso ele quase sempre vinha zerado: sanções/PEP raramente
+  // têm registro, e eram os únicos fatores considerados. Agora um volume
+  // relevante de comunicações processuais ou notícia negativa real também
+  // eleva o risco.
+  const judTotal=dd2JudicialData.length;
+  if(judTotal>=6)score=Math.min(100,score+25);
+  else if(judTotal>=3)score=Math.min(100,score+15);
+  else if(judTotal>=1)score=Math.min(100,score+8);
+
+  if(!dd2MidiaFalhou&&dd2MidiaData.length>0)score=Math.min(100,score+25);
+
   score=Math.min(100,score);
   gauge.textContent=score;
   if(score<25){gauge.className='dd2-gauge-circle low';label.textContent='RISCO BAIXO';label.style.color='#22c55e';}
@@ -827,9 +863,9 @@ function dd2RenderScore(){
   else{gauge.className='dd2-gauge-circle high';label.textContent='RISCO ALTO';label.style.color='#ef4444';}
   const pillars=[
     {icon:'&#127963;',label:'Cadastral',cls:(!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'))?'ok':'bad',txt:null},
-    {icon:'&#9878;',label:'Judicial',cls:dd2JudicialData.length===0?'ok':'bad',txt:null},
-    {icon:'&#128171;',label:'Sanções',cls:sanTotal===0?'ok':'bad',txt:null},
-    {icon:'&#127963;',label:'PEP',cls:dd2PepData.length===0?'ok':'bad',txt:null},
+    {icon:'&#9878;',label:'Judicial',cls:judTotal===0?'ok':'bad',txt:null},
+    {icon:'&#128171;',label:'Sanções',cls:sancoesFalhouTudo?'warn':(sanTotal===0?'ok':'bad'),txt:sancoesFalhouTudo?'Não verificado':null},
+    {icon:'&#127963;',label:'PEP',cls:dd2PepFalhou?'warn':(dd2PepData.length===0?'ok':'bad'),txt:dd2PepFalhou?'Não verificado':null},
     {icon:'&#128240;',label:'Mídia',cls:dd2MidiaFalhou?'warn':(dd2MidiaData.length===0?'ok':'bad'),txt:dd2MidiaFalhou?'Não verificado':null}
   ];
   pillarsEl.innerHTML=pillars.map(p=>`<div class="dd2-pillar">
@@ -866,12 +902,13 @@ function dd2RenderChecklist(){
   const d=dd2CadastralData;
   const sit=d?.situacao||'';
   const sanTotal=(dd2SancoesData?.ceis||[]).length+(dd2SancoesData?.cnep||[]).length;
+  const sancoesFalhouTudo=!!(dd2SancoesData?.ceisFalhou&&dd2SancoesData?.cnepFalhou);
   const items=[
     {state:d?'ok':'bad',label:'Dados cadastrais obtidos',icon:'&#127963;'},
     {state:(!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'))?'ok':'bad',label:'Situação cadastral regular',icon:'&#128188;'},
     {state:dd2JudicialData.length===0?'ok':'bad',label:dd2JudicialData.length?`${dd2JudicialData.length} comunicação(ões) processual(is) encontrada(s) no DJEN`:'Sem comunicações processuais no DJEN',icon:'&#9878;'},
-    {state:sanTotal===0?'ok':'bad',label:'Sem sanções CEIS/CNEP',icon:'&#128171;'},
-    {state:dd2PepData.length===0?'ok':'bad',label:'Sem registro PEP',icon:'&#127963;'},
+    {state:sancoesFalhouTudo?'warn':(sanTotal===0?'ok':'bad'),label:sancoesFalhouTudo?'Não foi possível verificar sanções CEIS/CNEP':'Sem sanções CEIS/CNEP',icon:'&#128171;'},
+    {state:dd2PepFalhou?'warn':(dd2PepData.length===0?'ok':'bad'),label:dd2PepFalhou?'Não foi possível verificar PEP':'Sem registro PEP',icon:'&#127963;'},
     {state:dd2MidiaFalhou?'warn':(dd2MidiaData.length===0?'ok':'bad'),label:dd2MidiaFalhou?'Não foi possível verificar mídia negativa automaticamente':'Sem notícias negativas',icon:'&#128240;'}
   ];
   if(document.getElementById('dd2-tipo').value==='cpf'){
