@@ -246,6 +246,7 @@ let dd2CadastralData = null;
 let dd2SancoesData = {ceis:[],cnep:[]};
 let dd2PepData = [];
 let dd2MidiaData = [];
+let dd2MidiaFalhou = false;
 let dd2BolsaData = [];
 
 function dd2FormatDoc(input){
@@ -305,7 +306,7 @@ async function dd2Iniciar(){
   document.getElementById('dd2-sec-midia').style.display=scMid?'block':'none';
   document.getElementById('dd2-sec-bolsa').style.display=scBolsa?'block':'none';
   dd2SetProgress(5);
-  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[]};dd2PepData=[];dd2MidiaData=[];dd2BolsaData=[];
+  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[]};dd2PepData=[];dd2MidiaData=[];dd2MidiaFalhou=false;dd2BolsaData=[];
   const tasks=[];
 
   // Failsafe: se alguma chamada travar inesperadamente, libera a tela mesmo assim
@@ -398,14 +399,16 @@ async function dd2Iniciar(){
     tasks.push(
       cadastralPromise.then(cad=>{
         const nome=cad?.razao||nomeManual||doc;
-        return fetch('https://corsproxy.io/?url='+encodeURIComponent('https://api.duckduckgo.com/?q='+encodeURIComponent(nome+' corrupção fraude escândalo')+'&format=json&no_html=1&skip_disambig=1'),{signal:AbortSignal.timeout(10000)})
-          .then(r=>r.ok?r.json():null)
-          .then(d=>{
-            const items=(d?.RelatedTopics||[]).filter(t=>t.FirstURL&&t.Text).map(t=>({link:t.FirstURL,title:t.Text,source:{name:'DuckDuckGo'},pubDate:'',content_text:t.Text}));
-            dd2MidiaData=items;dd2SetStep('midia','done');dd2SetProgress(88);
-            dd2RenderMidia(dd2MidiaData);
-          });
-      }).catch(()=>{dd2SetStep('midia','error');dd2RenderMidia([]);})
+        const docFmt=dd2FmtDoc(doc,tipo);
+        return dd2BuscarMidiaNegativa(nome,docFmt).then(items=>{
+          dd2MidiaData=items;dd2MidiaFalhou=false;dd2SetStep('midia','done');dd2SetProgress(88);
+          dd2RenderMidia(items,nome,docFmt,false);
+        }).catch(()=>{
+          dd2SetStep('midia','error');
+          dd2MidiaData=[];dd2MidiaFalhou=true;
+          dd2RenderMidia([],nome,docFmt,true);
+        });
+      })
     );
   } else { dd2SetStep('midia','done'); }
   if(scBolsa&&tipo==='cpf'){
@@ -711,14 +714,99 @@ function dd2RenderBolsaFamilia(res){
   ${dd2LinkManualBolsa()}`;
 }
 
-function dd2RenderMidia(data){
+// Busca notícias negativas via Google News RSS — feed público, estável, que
+// devolve título/link/data/veículo reais (diferente da antiga API de
+// "respostas instantâneas" do DuckDuckGo, que não é motor de busca e quase
+// sempre voltava vazia — ver nota equivalente em due-diligence.js).
+// O feed não tem CORS liberado pro navegador, então passa por um proxy;
+// dois proxies são tentados em sequência caso o primeiro esteja fora do ar
+// ou tenha sido bloqueado pelo Google (páginas de "tráfego incomum").
+const DD2_CORS_PROXIES=[
+  u=>'https://corsproxy.io/?url='+encodeURIComponent(u),
+  u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),
+];
+
+function dd2ParseGoogleNewsRSS(xmlText){
+  const doc=new DOMParser().parseFromString(xmlText,'text/xml');
+  if(doc.querySelector('parsererror'))return null;
+  return[...doc.querySelectorAll('item')].map(it=>{
+    let title=it.querySelector('title')?.textContent||'';
+    const source=it.querySelector('source')?.textContent||'';
+    if(source&&title.endsWith(' - '+source))title=title.slice(0,-(' - '+source).length);
+    return{title,link:it.querySelector('link')?.textContent||'',pubDate:it.querySelector('pubDate')?.textContent||'',source:{name:source}};
+  });
+}
+
+async function dd2FetchGoogleNewsRSS(query){
+  const feedUrl='https://news.google.com/rss/search?q='+encodeURIComponent(query)+'&hl=pt-BR&gl=BR&ceid=BR:pt-419';
+  let lastErr=null;
+  for(const buildProxyUrl of DD2_CORS_PROXIES){
+    try{
+      const r=await fetch(buildProxyUrl(feedUrl),{signal:AbortSignal.timeout(12000)});
+      if(!r.ok){lastErr=new Error('HTTP '+r.status);continue;}
+      const text=await r.text();
+      if(!text.includes('<item>')){lastErr=new Error('Resposta sem itens — possível bloqueio do provedor');continue;}
+      const items=dd2ParseGoogleNewsRSS(text);
+      if(items)return items;
+      lastErr=new Error('XML inválido');
+    }catch(e){lastErr=e;}
+  }
+  throw lastErr||new Error('Todos os provedores de busca de notícias falharam');
+}
+
+// Dispara buscas em paralelo por cada categoria de risco (mesmas queries
+// booleanas usadas no Due Diligence 1 — ver buildBooleanQuery em
+// due-diligence.js) e mescla os resultados deduplicados por link, pra
+// cobrir criminal/financeiro/regulatório/reputacional numa só varredura.
+async function dd2BuscarMidiaNegativa(nome,docFmt){
+  const bool=(typeof buildBooleanQuery==='function')?buildBooleanQuery(nome,docFmt):null;
+  const queries=bool?[bool.criminal,bool.financeiro,bool.regulatorio,bool.reputacional]:[`"${nome}" ${docFmt||''} corrupção OR fraude OR escândalo OR investigação`.trim()];
+  const resultados=await Promise.allSettled(queries.map(q=>dd2FetchGoogleNewsRSS(q)));
+  const porLink=new Map();
+  let algumaOk=false;
+  resultados.forEach(res=>{
+    if(res.status==='fulfilled'){
+      algumaOk=true;
+      res.value.forEach(item=>{if(item.link&&!porLink.has(item.link))porLink.set(item.link,item);});
+    }
+  });
+  if(!algumaOk)throw new Error('Todas as buscas de mídia negativa falharam');
+  return[...porLink.values()].sort((a,b)=>new Date(b.pubDate)-new Date(a.pubDate));
+}
+
+// Links de verificação manual, como reforço à busca automática (mesmo
+// padrão do dd2LinksManuaisHTML usado na seção Judicial).
+function dd2LinksManuaisMidiaHTML(nome,docFmt){
+  const bool=(typeof buildBooleanQuery==='function')?buildBooleanQuery(nome,docFmt):null;
+  const alvo=nome||docFmt||'';
+  const alvoSafe=escapeHtml(alvo);
+  const qCriminal=bool?bool.criminal:`"${alvo}" corrupção OR fraude OR escândalo`;
+  const links=[
+    {label:`Google — mídias negativas de "${alvoSafe}" (busca booleana)`,url:`https://www.google.com/search?q=${encodeURIComponent(qCriminal)}`},
+    {label:`Google Notícias — "${alvoSafe}"`,url:`https://news.google.com/search?q=${encodeURIComponent('"'+alvo+'"')}&hl=pt-BR&gl=BR&ceid=BR:pt-419`},
+    {label:`JusBrasil Notícias — "${alvoSafe}"`,url:`https://www.jusbrasil.com.br/busca?q=${encodeURIComponent(alvo)}`},
+    {label:`Reclame Aqui — "${alvoSafe}"`,url:`https://www.reclameaqui.com.br/busca/?q=${encodeURIComponent(alvo)}`},
+  ];
+  return`
+    <div style="font-size:.72rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Reforçar verificação manualmente</div>
+    <div class="dd2-links-ext">${links.map(l=>`<a href="${l.url}" target="_blank" class="dd2-link-ext">🔗 ${l.label}</a>`).join('')}</div>
+  `;
+}
+
+function dd2RenderMidia(data,nome,docFmt,falhou){
   const el=document.getElementById('dd2-midia-content');
-  if(!data.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhuma notícia negativa encontrada.</p>';return;}
+  if(falhou){
+    el.innerHTML=`<p style="color:#ef4444;margin-bottom:10px">⚠️ Não foi possível consultar mídia negativa automaticamente no momento (provedores de busca indisponíveis ou bloqueados) — confira manualmente.</p>${dd2LinksManuaisMidiaHTML(nome,docFmt)}`;
+    return;
+  }
+  if(!data.length){
+    el.innerHTML=`<p style="color:#22c55e;font-weight:600;margin-bottom:10px">✅ Nenhuma notícia negativa encontrada nas buscas automáticas.</p>${dd2LinksManuaisMidiaHTML(nome,docFmt)}`;
+    return;
+  }
   el.innerHTML=data.slice(0,20).map(n=>`<div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:8px;background:#fff">
-    <div style="font-weight:600;font-size:.88rem;margin-bottom:4px"><a href="${n.link||'#'}" target="_blank" style="color:#0f2d4a;text-decoration:none">${n.title||'Sem título'}</a></div>
-    <div style="font-size:.78rem;color:#64748b">${n.pubDate||''} — ${n.source?.name||n.author||''}</div>
-    <div style="font-size:.82rem;color:#64748b;margin-top:4px">${(n.content_text||n.description||'').substring(0,200)}...</div>
-  </div>`).join('');
+    <div style="font-weight:600;font-size:.88rem;margin-bottom:4px"><a href="${n.link||'#'}" target="_blank" style="color:#0f2d4a;text-decoration:none">${escapeHtml(n.title)||'Sem título'}</a></div>
+    <div style="font-size:.78rem;color:#64748b">${n.pubDate?new Date(n.pubDate).toLocaleDateString('pt-BR'):''} — ${escapeHtml(n.source?.name)||''}</div>
+  </div>`).join('')+`<div style="margin-top:10px">${dd2LinksManuaisMidiaHTML(nome,docFmt)}</div>`;
 }
 
 function dd2RenderScore(){
@@ -742,7 +830,7 @@ function dd2RenderScore(){
     {icon:'&#9878;',label:'Judicial',cls:dd2JudicialData.length===0?'ok':'bad',txt:null},
     {icon:'&#128171;',label:'Sanções',cls:sanTotal===0?'ok':'bad',txt:null},
     {icon:'&#127963;',label:'PEP',cls:dd2PepData.length===0?'ok':'bad',txt:null},
-    {icon:'&#128240;',label:'Mídia',cls:dd2MidiaData.length===0?'ok':'bad',txt:null}
+    {icon:'&#128240;',label:'Mídia',cls:dd2MidiaFalhou?'warn':(dd2MidiaData.length===0?'ok':'bad'),txt:dd2MidiaFalhou?'Não verificado':null}
   ];
   pillarsEl.innerHTML=pillars.map(p=>`<div class="dd2-pillar">
     <div class="dd2-pillar-icon">${p.icon}</div>
@@ -784,7 +872,7 @@ function dd2RenderChecklist(){
     {state:dd2JudicialData.length===0?'ok':'bad',label:dd2JudicialData.length?`${dd2JudicialData.length} comunicação(ões) processual(is) encontrada(s) no DJEN`:'Sem comunicações processuais no DJEN',icon:'&#9878;'},
     {state:sanTotal===0?'ok':'bad',label:'Sem sanções CEIS/CNEP',icon:'&#128171;'},
     {state:dd2PepData.length===0?'ok':'bad',label:'Sem registro PEP',icon:'&#127963;'},
-    {state:dd2MidiaData.length===0?'ok':'bad',label:'Sem notícias negativas',icon:'&#128240;'}
+    {state:dd2MidiaFalhou?'warn':(dd2MidiaData.length===0?'ok':'bad'),label:dd2MidiaFalhou?'Não foi possível verificar mídia negativa automaticamente':'Sem notícias negativas',icon:'&#128240;'}
   ];
   if(document.getElementById('dd2-tipo').value==='cpf'){
     items.push({state:dd2BolsaData.length===0?'ok':'bad',label:dd2BolsaData.length?`Recebe Bolsa Família (${dd2BolsaData.length} parcela(s))`:'Não recebe Bolsa Família',icon:'&#128176;'});
