@@ -33,7 +33,11 @@ function ddSwitchTab(tab){
 
 // ── GOOGLE URL ────────────────────────────
 function ddG(q){return{url:'https://www.google.com/search?q='+encodeURIComponent(q),query:q,isGoogle:true};}
-function ddGT(q){return{url:'https://www.google.com/search?q='+encodeURIComponent(q)+'&tbm=nws',query:q+' [NOTÍCIAS]',isGoogle:true};}// Google Notícias
+// Google Notícias — usa a URL atual do produto (news.google.com/search) em
+// vez do parâmetro antigo "&tbm=nws", que a Google vem descontinuando aos
+// poucos e passou a devolver página de erro/redirecionamento em várias
+// contas e regiões.
+function ddGT(q){return{url:'https://news.google.com/search?q='+encodeURIComponent(q)+'&hl=pt-BR&gl=BR&ceid=BR:pt-419',query:q+' [NOTÍCIAS]',isGoogle:true};}
 function ddA(url,q){return{url,query:q,isGoogle:false};}
 
 // ── BOOLEAN SEARCH BUILDER ────────────────
