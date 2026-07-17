@@ -932,60 +932,22 @@ function dd2LimparTrecho(txt){
   return limpo;
 }
 
-const DD2_DOERJ_URL='https://www.ioerj.com.br/portal/modules/conteudoonline/busca_do.php?acao=busca';
-
-// Busca no Diário Oficial do Estado do Rio de Janeiro (DOERJ) — cobre atos
-// do Poder Executivo/Legislativo/Judiciário estadual e, na "Parte IV", os
-// municípios do RJ que publicam matérias ali em vez de diário próprio.
-// Sistema legado (XOOPS), sem API JSON — só funciona via POST com corpo
-// application/x-www-form-urlencoded (testado: GET com os mesmos parâmetros
-// não retorna nada) e não libera CORS pro navegador, por isso passa pela
-// rota /proxy da Edge Function. A busca entre aspas retorna frase exata,
-// igual ao DOU — sem aspas o sistema devolve termos soltos, gerando ruído.
-async function dd2FetchDOERJ(querystring){
-  if(!querystring) return [];
-  const corpo=new URLSearchParams({
-    textobusca:'"'+querystring+'"',
-    'busca[jornal]':'',
-    'datapublicacao[dia]':'','datapublicacao[mes]':'','datapublicacao[ano]':'',
-    tipobusca:'texto',
-    buscaordem:'datapublicacao desc',
-  }).toString();
-  const r=await fetch(dd2ProxyUrl(DD2_DOERJ_URL),{
-    method:'POST',
-    headers:{...dd2PortalHeaders(),'Content-Type':'application/x-www-form-urlencoded'},
-    body:corpo,
-    signal:AbortSignal.timeout(20000),
-  });
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  const html=await r.text();
-  return dd2ParseDOERJ(html);
+// Diário Oficial do Estado do Rio de Janeiro (DOERJ) — chegamos a
+// implementar a busca automática (sistema legado XOOPS, via POST na rota
+// /proxy da Edge Function), mas o servidor do ioerj.com.br derruba a
+// conexão ("Connection reset by peer") pra qualquer requisição vinda da
+// infraestrutura do Deno Deploy — testamos com e sem headers de navegador,
+// mesmo erro nos dois casos. É bloqueio de rede/IP do lado deles, não
+// corrigível daqui (mesma categoria da CNIA/BNMP/e-SAJ: dado existe, sem
+// jeito de automatizar). Fica só como link manual — ver dd2LinkManualDoerj.
+const DD2_DOERJ_URL='https://www.ioerj.com.br/portal/';
+function dd2LinkManualDoerj(alvo){
+  return `<a href="${DD2_DOERJ_URL}" target="_blank" class="dd2-link-ext">🔗 Buscar manualmente no DOERJ${alvo?` — "${escapeHtml(alvo)}"`:''}</a>`;
 }
 
-// Extrai cada resultado do HTML de resposta (sistema legado, sem JSON) —
-// cada matéria aparece como um bloco de 3 linhas de tabela: link + data/
-// página/ID, Jornal/Tipo, e o trecho com o termo buscado destacado em <em>.
-function dd2ParseDOERJ(html){
-  const itens=[];
-  const re=/href="(\/portal\/modules\/conteudoonline\/view_publicacao\.php\?[^"]+)"[\s\S]*?<span class="style2">([^<]+)<\/span>[\s\S]*?<b>Jornal:<\/b>\s*([^<]+)<\/span>[\s\S]*?<b>Tipo:<\/b>\s*([^<]+)<\/span>[\s\S]*?<span>\s*([\s\S]*?)<\/span>\s*<\/td>\s*<\/tr>/g;
-  let m;
-  while((m=re.exec(html))){
-    const dataMatch=m[2].match(/(\d{2}\/\d{2}\/\d{4})/);
-    itens.push({
-      link:'https://www.ioerj.com.br'+m[1].replace(/&amp;/g,'&'),
-      cabecalho:m[2].replace(/\s+/g,' ').trim(),
-      data:dataMatch?dataMatch[1]:'',
-      jornal:m[3].replace(/\s+/g,' ').trim(),
-      tipo:m[4].replace(/\s+/g,' ').trim(),
-      trecho:m[5].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim(),
-    });
-  }
-  return itens;
-}
-
-// DOU, Querido Diário e DOERJ devolvem formatos totalmente diferentes
-// (datas em formatos opostos, HTML de destaque embutido no texto etc.) —
-// normaliza os três pro mesmo formato de exibição.
+// DOU e Querido Diário devolvem formatos totalmente diferentes (datas em
+// formatos opostos, HTML de destaque embutido no texto etc.) — normaliza
+// os dois pro mesmo formato de exibição.
 function dd2NormalizarDiario(item,fonte){
   if(fonte==='DOU'){
     const trecho=dd2LimparTrecho((item.content||'').replace(/<[^>]+>/g,''));
@@ -995,15 +957,6 @@ function dd2NormalizarDiario(item,fonte){
       data:item.pubDate||'—',
       trechos:[trecho].filter(Boolean),
       url:item.urlTitle?`https://www.in.gov.br/web/dou/-/${item.urlTitle}`:'',
-    };
-  }
-  if(fonte==='DOERJ'){
-    return {
-      titulo:item.cabecalho||'Diário Oficial do Estado do RJ',
-      local:`${item.jornal||'—'} · ${item.tipo||'—'}`,
-      data:item.data||'—',
-      trechos:[dd2LimparTrecho(item.trecho)].filter(Boolean),
-      url:item.link||'',
     };
   }
   return {
@@ -1034,13 +987,9 @@ async function dd2BuscarDiarios(nome,docNum,tipo){
   // já que licitação/contrato publica o CNPJ completo com frequência.
   const buscasQD=tipo==='cnpj'?[dd2FetchQueridoDiario(docFmt)]:[];
   const buscasDOU=tipo==='cnpj'?[dd2FetchDOU(docFmt)]:[];
-  // DOERJ (estadual + municípios do RJ) roda sempre que houver documento ou
-  // nome pra buscar — complementa o DOU (federal) e o Querido Diário
-  // (municípios cobertos nacionalmente, mas sem o Diário estadual do RJ).
-  const buscasDOERJ=tipo==='cnpj'?[dd2FetchDOERJ(docFmt)]:[];
-  if(nome){ buscasQD.push(dd2FetchQueridoDiario(nome)); buscasDOU.push(dd2FetchDOU(nome)); buscasDOERJ.push(dd2FetchDOERJ(nome)); }
+  if(nome){ buscasQD.push(dd2FetchQueridoDiario(nome)); buscasDOU.push(dd2FetchDOU(nome)); }
 
-  const [resQD,resDOU,resDOERJ]=await Promise.all([Promise.allSettled(buscasQD),Promise.allSettled(buscasDOU),Promise.allSettled(buscasDOERJ)]);
+  const [resQD,resDOU]=await Promise.all([Promise.allSettled(buscasQD),Promise.allSettled(buscasDOU)]);
   let algumaFalhou=false;
   const porChave=new Map();
   resQD.forEach(res=>{
@@ -1059,16 +1008,8 @@ async function dd2BuscarDiarios(nome,docNum,tipo){
       });
     } else algumaFalhou=true;
   });
-  resDOERJ.forEach(res=>{
-    if(res.status==='fulfilled'){
-      res.value.forEach(g=>{
-        const chave='doerj|'+(g.link||'');
-        if(!porChave.has(chave)) porChave.set(chave,{...dd2NormalizarDiario(g,'DOERJ'),_fonte:'DOERJ'});
-      });
-    } else algumaFalhou=true;
-  });
 
-  const resultadosTodos=[...resQD,...resDOU,...resDOERJ];
+  const resultadosTodos=[...resQD,...resDOU];
   if(algumaFalhou&&resultadosTodos.every(r=>r.status==='rejected')) throw new Error('Todas as buscas em diários oficiais falharam');
   const items=[...porChave.values()].sort((a,b)=>dd2DataDiarioOrdenavel(b.data).localeCompare(dd2DataDiarioOrdenavel(a.data)));
   return {items,algumaFalhou};
@@ -1076,7 +1017,7 @@ async function dd2BuscarDiarios(nome,docNum,tipo){
 
 function dd2RenderDiarios(res,semNome){
   const el=document.getElementById('dd2-diarios-content');
-  if(!res){el.innerHTML='<p style="color:#ef4444">⚠️ Não foi possível consultar os diários oficiais automaticamente no momento.</p>';return;}
+  if(!res){el.innerHTML='<p style="color:#ef4444">⚠️ Não foi possível consultar os diários oficiais automaticamente no momento.</p>'+dd2LinkManualDoerj();return;}
   const {items,algumaFalhou}=res;
   const aviso=algumaFalhou?'<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais buscas em diários oficiais falharam — resultado pode estar incompleto.</p>':'';
   // Pra CPF a busca é só pelo nome (CPF completo não é publicado por
@@ -1084,15 +1025,15 @@ function dd2RenderDiarios(res,semNome){
   // automaticamente via DJEN), a busca nem roda. Isso é bem diferente de
   // "procurei e não achei nada", então mostra aviso amarelo em vez do ✅
   // verde de "sem menção encontrada".
-  if(semNome){el.innerHTML=aviso+'<p style="color:#b45309;font-weight:600">⚠️ Nenhum nome disponível pra buscar — informe o nome completo da pessoa no campo acima pra pesquisar nos diários oficiais.</p>';return;}
-  if(!items.length){el.innerHTML=aviso+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma menção encontrada em diários oficiais.</p>';return;}
-  el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>DOU — Diário Oficial da União</strong> (atos federais), no <strong>DOERJ — Diário Oficial do Estado do RJ</strong> (atos estaduais e municípios do RJ) e no <strong>Querido Diário</strong> (Open Knowledge Brasil — mais de 350 municípios). Clique num resultado pra ver todos os trechos onde o termo foi encontrado.</p>
+  if(semNome){el.innerHTML=aviso+'<p style="color:#b45309;font-weight:600">⚠️ Nenhum nome disponível pra buscar — informe o nome completo da pessoa no campo acima pra pesquisar nos diários oficiais.</p>'+dd2LinkManualDoerj();return;}
+  if(!items.length){el.innerHTML=aviso+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma menção encontrada em diários oficiais.</p>'+dd2LinkManualDoerj();return;}
+  el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>DOU — Diário Oficial da União</strong> (atos federais) e no <strong>Querido Diário</strong> (Open Knowledge Brasil — mais de 350 municípios). O <strong>DOERJ</strong> (Diário Oficial do RJ) não permite automação — veja o link manual abaixo. Clique num resultado pra ver todos os trechos onde o termo foi encontrado.</p>
   ${items.slice(0,30).map((g,i)=>{
     const trechos=(g.trechos||[]).filter(Boolean);
     const trecho=trechos[0]||'';
     const idRow='dd2-diario-det-'+i;
     const resumoCompleto=trechos.length?trechos.map((tx,j)=>`<div style="${j<trechos.length-1?'margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed #e2e8f0':''}">${trechos.length>1?`<b>Trecho ${j+1} de ${trechos.length}:</b><br>`:''}${escapeHtml(tx)}</div>`).join(''):'<span style="color:#94a3b8">Nenhum trecho disponível pra exibição.</span>';
-    const badgeCls=g._fonte==='DOU'?'info':g._fonte==='DOERJ'?'danger':'warn';
+    const badgeCls=g._fonte==='DOU'?'info':'warn';
     return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:8px;background:#fff">
       <div style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}','block')">
         <div style="font-weight:600;font-size:.85rem;margin-bottom:2px"><span id="${idRow}-seta" style="color:#94a3b8;font-size:.72rem">▸</span> <span class="dd2-badge ${badgeCls}">${g._fonte}</span> ${escapeHtml(g.titulo)||'—'}</div>
@@ -1102,7 +1043,8 @@ function dd2RenderDiarios(res,semNome){
       <div id="${idRow}" style="display:none;background:#f8fafc;border-radius:6px;padding:10px;margin:8px 0 4px;font-size:.8rem;color:#334155;line-height:1.6">${resumoCompleto}</div>
       ${g.url?`<a href="${g.url}" target="_blank" onclick="event.stopPropagation()" style="font-size:.76rem;color:#0f2d4a">🔗 Ver publicação original</a>`:''}
     </div>`;
-  }).join('')}`;
+  }).join('')}
+  <div style="margin-top:10px">${dd2LinkManualDoerj()}</div>`;
 }
 
 const DD2_SANCTIONS_URL='https://api.sanctions.network/rpc/search_sanctions';
