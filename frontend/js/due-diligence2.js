@@ -281,8 +281,11 @@ function dd2FormatDoc(input){
 // tem cobertura bem menor que buscar pelo nome da parte.
 function dd2OnTipoChange(){
   dd2FormatDoc(document.getElementById('dd2-doc'));
+  const ehCpf=document.getElementById('dd2-tipo').value==='cpf';
   const grp=document.getElementById('dd2-nome-group');
-  if(grp) grp.style.display=document.getElementById('dd2-tipo').value==='cpf'?'flex':'none';
+  if(grp) grp.style.display=ehCpf?'flex':'none';
+  const docEl=document.getElementById('dd2-doc');
+  if(docEl) docEl.placeholder=ehCpf?'000.000.000-00 (opcional com nome)':'00.000.000/0001-00';
 }
 
 function dd2SetStep(id,state){
@@ -299,9 +302,15 @@ function dd2SetProgress(pct){
 async function dd2Iniciar(){
   const doc=document.getElementById('dd2-doc').value.replace(/\D/g,'');
   const tipo=document.getElementById('dd2-tipo').value;
-  if(doc.length<11){alert('Informe um documento válido.');return;}
   // Só relevante pra CPF — pra CNPJ a razão social já vem da Receita Federal.
   const nomeManual=tipo==='cpf'?(document.getElementById('dd2-nome')?.value||'').trim():'';
+  // Pra CPF, libera investigar só com o nome (sem documento) — útil quando
+  // só se sabe o nome da pessoa. As bases que só existem por documento
+  // (CEIS/CNEP/Leniência/CEPIM/CEAF, Bolsa Família) ficam indisponíveis
+  // nesse modo (ver guardas abaixo); DJEN, PEP, Mídia Negativa e Diários
+  // Oficiais funcionam normalmente só com o nome.
+  if(doc.length<11 && !(tipo==='cpf'&&nomeManual)){alert('Informe um documento válido ou, pra CPF, ao menos o nome completo.');return;}
+  const semDoc=doc.length<11;
   const scCad=document.getElementById('dd2-sc-cadastral').checked;
   const scFis=document.getElementById('dd2-sc-fiscal').checked;
   const scJud=document.getElementById('dd2-sc-judicial').checked;
@@ -449,12 +458,16 @@ async function dd2Iniciar(){
       Promise.all([cadastralPromise,nomeResolvidoPromise]).then(([cad,nomeResolvido])=>{
         const nomeParaSancao=cad?.razao||nomeManual||nomeResolvido||'';
         const chamar=(rota,params)=>fetch(dd2PortalUrl(rota,params+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
+        // CEIS/CNEP/Leniência/CEPIM/CEAF só existem por número de documento —
+        // sem doc (modo só-nome), pedir com codigoSancionado vazio não acha
+        // nada e não é "sem sanção", é "não verificado". Só a base
+        // internacional (por nome) roda nesse caso.
         return Promise.allSettled([
-          chamar('ceis','codigoSancionado='+doc),
-          chamar('cnep','codigoSancionado='+doc),
-          tipo==='cnpj'?chamar('acordos-leniencia','cnpjSancionado='+doc):Promise.resolve([]),
-          tipo==='cnpj'?chamar('cepim','cnpjSancionado='+doc):Promise.resolve([]),
-          tipo==='cpf'?chamar('ceaf','cpfSancionado='+doc):Promise.resolve([]),
+          semDoc?Promise.resolve([]):chamar('ceis','codigoSancionado='+doc),
+          semDoc?Promise.resolve([]):chamar('cnep','codigoSancionado='+doc),
+          (!semDoc&&tipo==='cnpj')?chamar('acordos-leniencia','cnpjSancionado='+doc):Promise.resolve([]),
+          (!semDoc&&tipo==='cnpj')?chamar('cepim','cnpjSancionado='+doc):Promise.resolve([]),
+          (!semDoc&&tipo==='cpf')?chamar('ceaf','cpfSancionado='+doc):Promise.resolve([]),
           nomeParaSancao?dd2FetchSanctionsNetwork(nomeParaSancao):Promise.resolve([]),
         ]).then(resultados=>[resultados,nomeParaSancao]);
       }).then(([[ceisRes,cnepRes,lenRes,cepimRes,ceafRes,intRes],nomeParaSancao])=>{
@@ -462,9 +475,10 @@ async function dd2Iniciar(){
         dd2SancoesData={
           ceis:pega(ceisRes),cnep:pega(cnepRes),leniencia:pega(lenRes),cepim:pega(cepimRes),ceaf:pega(ceafRes),
           internacional:dd2FiltrarRuidoSancoesIntl(pega(intRes),nomeParaSancao),
-          ceisFalhou:ceisRes.status==='rejected',cnepFalhou:cnepRes.status==='rejected',
+          ceisFalhou:!semDoc&&ceisRes.status==='rejected',cnepFalhou:!semDoc&&cnepRes.status==='rejected',
+          semDocumento:semDoc,
         };
-        dd2SetStep('sancoes',(ceisRes.status==='rejected'&&cnepRes.status==='rejected')?'error':'done');dd2SetProgress(65);
+        dd2SetStep('sancoes',(!semDoc&&ceisRes.status==='rejected'&&cnepRes.status==='rejected')?'error':'done');dd2SetProgress(65);
         dd2RenderSancoes(dd2SancoesData);
       })
     );
@@ -501,7 +515,7 @@ async function dd2Iniciar(){
       })
     );
   } else { dd2SetStep('midia','done'); }
-  if(scBolsa&&tipo==='cpf'){
+  if(scBolsa&&tipo==='cpf'&&!semDoc){
     dd2SetStep('bolsa','active');
     tasks.push(
       dd2FetchBolsaFamilia(doc).then(res=>{
@@ -509,6 +523,10 @@ async function dd2Iniciar(){
         dd2RenderBolsaFamilia(res);
       }).catch(()=>{dd2SetStep('bolsa','error');dd2RenderBolsaFamilia(null);})
     );
+  } else if(scBolsa&&tipo==='cpf'){
+    // Modo só-nome (sem CPF) — não existe busca de Bolsa Família por nome.
+    dd2SetStep('bolsa','done');
+    document.getElementById('dd2-bolsa-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta de Bolsa Família exige o CPF — informe o documento pra habilitar essa verificação.</p>';
   } else if(scBolsa){
     dd2SetStep('bolsa','done');
     document.getElementById('dd2-bolsa-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta de Bolsa Família disponível apenas para CPF.</p>';
@@ -748,7 +766,10 @@ async function dd2FetchDJEN(params){
 // deduplicados por id.
 async function dd2BuscarProcessosDJEN(nome,docNum,tipo,socios){
   const docFmt=dd2FmtDoc(docNum,tipo);
-  const buscas=[{origem:'documento',p:dd2FetchDJEN({texto:docFmt})}];
+  // Sem documento (modo só-nome), não faz sentido buscar por um "texto"
+  // vazio — o DJEN trataria isso como filtro em branco e traria resultado
+  // sem relação nenhuma com a pessoa.
+  const buscas=docNum?[{origem:'documento',p:dd2FetchDJEN({texto:docFmt})}]:[];
   if(nome) buscas.push({origem:'nome',p:dd2FetchDJEN({nomeParte:nome})});
   (socios||[]).filter(s=>s.nome).slice(0,4).forEach(s=>{
     buscas.push({origem:'sócio "'+s.nome+'"',p:dd2FetchDJEN({nomeParte:s.nome})});
@@ -780,7 +801,7 @@ function dd2LinksManuaisHTML(nome,docNum,tipo,socios){
   const alvoSafe=escapeHtml(alvo);
   const linksAlvo=[
     {label:`JusBrasil — processos de "${alvoSafe}"`,url:`https://www.jusbrasil.com.br/consulta-processual/?q=${encodeURIComponent(alvo)}`},
-    {label:`JusBrasil — processos pelo documento ${docFmt}`,url:`https://www.jusbrasil.com.br/consulta-processual/?q=${docNum}`},
+    ...(docNum?[{label:`JusBrasil — processos pelo documento ${docFmt}`,url:`https://www.jusbrasil.com.br/consulta-processual/?q=${docNum}`}]:[]),
     {label:'CNJ — Consulta Processual Nacional (PJe)',url:'https://www.cnj.jus.br/pjecnj/'},
     {label:`Escavador — busca por "${alvoSafe}"`,url:`https://www.escavador.com/busca?q=${encodeURIComponent(alvo)}`},
   ];
@@ -1165,7 +1186,8 @@ function dd2RenderSancoes(d){
   const falhouTudo=!!(d?.ceisFalhou&&d?.cnepFalhou);
   if(falhouTudo){el.innerHTML='<p style="color:#ef4444;font-weight:600">⚠️ Não foi possível consultar as bases CEIS e CNEP automaticamente no momento.</p>';return;}
   let avisos='';
-  if(d?.ceisFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CEIS — resultado pode estar incompleto.</p>';
+  if(d?.semDocumento) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ CEIS, CNEP, Leniência, CEPIM e CEAF não foram verificados — essas bases exigem CPF/CNPJ. Só a base internacional (por nome) foi consultada.</p>';
+  else if(d?.ceisFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CEIS — resultado pode estar incompleto.</p>';
   else if(d?.cnepFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CNEP — resultado pode estar incompleto.</p>';
   const all=[
     ...(d?.ceis||[]).map(s=>({...dd2NormalizarSancao(s,'CEIS'),_base:'CEIS',_raw:s})),
@@ -1338,7 +1360,7 @@ function dd2RenderScore(){
   // falha de rede/autenticação vira "não verificado" (ver pillars abaixo),
   // não "0 = limpo". Sem essa distinção, uma consulta que falhar em
   // silêncio (ex.: 401 do token) zera o score mesmo sem checar nada.
-  const sancoesFalhouTudo=!!(dd2SancoesData?.ceisFalhou&&dd2SancoesData?.cnepFalhou);
+  const sancoesFalhouTudo=!!(dd2SancoesData?.semDocumento||(dd2SancoesData?.ceisFalhou&&dd2SancoesData?.cnepFalhou));
   const sanTotal=dd2SanTotal(dd2SancoesData);
   if(sanTotal>0)score=Math.min(100,score+40);
 
@@ -1402,7 +1424,7 @@ function dd2RenderChecklist(){
   const d=dd2CadastralData;
   const sit=d?.situacao||'';
   const sanTotal=dd2SanTotal(dd2SancoesData);
-  const sancoesFalhouTudo=!!(dd2SancoesData?.ceisFalhou&&dd2SancoesData?.cnepFalhou);
+  const sancoesFalhouTudo=!!(dd2SancoesData?.semDocumento||(dd2SancoesData?.ceisFalhou&&dd2SancoesData?.cnepFalhou));
   const items=[
     {state:d?'ok':'bad',label:'Dados cadastrais obtidos',icon:'&#127963;'},
     {state:(!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'))?'ok':'bad',label:'Situação cadastral regular',icon:'&#128188;'},
