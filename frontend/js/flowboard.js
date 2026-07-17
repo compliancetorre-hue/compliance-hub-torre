@@ -270,6 +270,10 @@ function fbAddCol() {
   const colors = ['#94a3b8','#3b82f6','#f59e0b','#00c49a','#8b5cf6','#ef4444'];
   board.cols.push({ id, name, color: colors[board.cols.length % colors.length], cards: [] });
   renderFlowboard();
+  saveLocalCache();
+  setSaveIndicator('⏳ Salvando...','var(--warn)');
+  sbSaveFbBoards().then(() => setSaveIndicator('☁️ FlowBoard salvo','var(--accent)'))
+                  .catch(() => setSaveIndicator('⚠️ Erro ao salvar na nuvem','var(--danger)'));
 }
 
 function fbNewBoard() {
@@ -285,4 +289,8 @@ function fbNewBoard() {
     ]
   };
   fbSetView(key, null);
+  saveLocalCache();
+  setSaveIndicator('⏳ Salvando...','var(--warn)');
+  sbSaveFbBoards().then(() => setSaveIndicator('☁️ FlowBoard salvo','var(--accent)'))
+                  .catch(() => setSaveIndicator('⚠️ Erro ao salvar na nuvem','var(--danger)'));
 }
