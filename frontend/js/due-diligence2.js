@@ -385,10 +385,10 @@ async function dd2Iniciar(){
     dd2SetStep('diarios','active');
     diariosPromise=cadastralPromise.then(cad=>{
         const nome=cad?.razao||nomeManual||'';
-        return dd2BuscarDiarios(nome,doc,tipo);
-      }).then(res=>{
+        return dd2BuscarDiarios(nome,doc,tipo).then(res=>({res,nome}));
+      }).then(({res,nome})=>{
         dd2DiariosData=res.items;
-        dd2RenderDiarios(res);
+        dd2RenderDiarios(res,tipo==='cpf'&&!nome);
         dd2SetStep('diarios','done');
         return res.items;
       }).catch(()=>{
@@ -418,6 +418,24 @@ async function dd2Iniciar(){
       }
       return '';
     }).catch(()=>{dd2RenderNomeIdentificado(null);return '';});
+    // A busca em diários pra CPF é só pelo nome (ver dd2BuscarDiarios) — se
+    // não tinha nome nenhum na primeira passada, ela roda vazia. Assim que
+    // um nome é identificado automaticamente (via DJEN, acima), refaz a
+    // busca nos diários com esse nome, em vez de deixar a seção presa no
+    // aviso "nenhum nome disponível" pro resto do relatório.
+    if(scDiarios){
+      tasks.push(
+        nomeResolvidoPromise.then(nomeResolvido=>{
+          if(!nomeResolvido) return;
+          dd2SetStep('diarios','active');
+          return dd2BuscarDiarios(nomeResolvido,doc,tipo).then(res=>{
+            dd2DiariosData=res.items;
+            dd2RenderDiarios(res,false);
+            dd2SetStep('diarios','done');
+          });
+        }).catch(()=>{})
+      );
+    }
   }
   if(scSan){
     dd2SetStep('sancoes','active');
@@ -817,7 +835,7 @@ function dd2CandidatoNomePorCPF(fontes,docFmt){
     somar(dd2ExtrairNomeProximoAoDoc(p.texto||'',docFmt));
   });
   (fontes.diarios||[]).forEach(g=>{
-    (g.excerpts||[]).forEach(tx=>somar(dd2ExtrairNomeProximoAoDoc(tx,docFmt)));
+    (g.trechos||[]).forEach(tx=>somar(dd2ExtrairNomeProximoAoDoc(tx,docFmt)));
   });
   if(!contagem.size) return null;
   const [nome,vezes]=[...contagem.entries()].sort((a,b)=>b[1]-a[1])[0];
@@ -963,11 +981,17 @@ async function dd2BuscarDiarios(nome,docNum,tipo){
   return {items,algumaFalhou};
 }
 
-function dd2RenderDiarios(res){
+function dd2RenderDiarios(res,semNome){
   const el=document.getElementById('dd2-diarios-content');
   if(!res){el.innerHTML='<p style="color:#ef4444">⚠️ Não foi possível consultar os diários oficiais automaticamente no momento.</p>';return;}
   const {items,algumaFalhou}=res;
   const aviso=algumaFalhou?'<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais buscas em diários oficiais falharam — resultado pode estar incompleto.</p>':'';
+  // Pra CPF a busca é só pelo nome (CPF completo não é publicado por
+  // extenso) — se não tem nome nenhum (nem digitado, nem identificado
+  // automaticamente via DJEN), a busca nem roda. Isso é bem diferente de
+  // "procurei e não achei nada", então mostra aviso amarelo em vez do ✅
+  // verde de "sem menção encontrada".
+  if(semNome){el.innerHTML=aviso+'<p style="color:#b45309;font-weight:600">⚠️ Nenhum nome disponível pra buscar — informe o nome completo da pessoa no campo acima pra pesquisar nos diários oficiais.</p>';return;}
   if(!items.length){el.innerHTML=aviso+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma menção encontrada em diários oficiais.</p>';return;}
   el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>DOU — Diário Oficial da União</strong> (atos federais) e no <strong>Querido Diário</strong> (Open Knowledge Brasil — mais de 350 municípios). Clique num resultado pra ver todos os trechos onde o termo foi encontrado.</p>
   ${items.slice(0,30).map((g,i)=>{
