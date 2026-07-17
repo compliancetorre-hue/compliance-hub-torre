@@ -832,13 +832,19 @@ function dd2RenderDiarios(res){
   const {items,algumaFalhou}=res;
   const aviso=algumaFalhou?'<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma das buscas no Querido Diário falhou — resultado pode estar incompleto.</p>':'';
   if(!items.length){el.innerHTML=aviso+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma menção encontrada em diários oficiais municipais.</p>';return;}
-  el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>Querido Diário</strong> (Open Knowledge Brasil) — texto integral de diários oficiais de mais de 350 municípios.</p>
-  ${items.slice(0,20).map(g=>{
-    const trecho=(g.excerpts||[])[0]||'';
+  el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>Querido Diário</strong> (Open Knowledge Brasil) — texto integral de diários oficiais de mais de 350 municípios. Clique num resultado pra ver todos os trechos onde o termo foi encontrado.</p>
+  ${items.slice(0,20).map((g,i)=>{
+    const excertos=(g.excerpts||[]).filter(Boolean);
+    const trecho=excertos[0]||'';
+    const idRow='dd2-diario-det-'+i;
+    const resumoCompleto=excertos.length?excertos.map((tx,j)=>`<div style="${j<excertos.length-1?'margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed #e2e8f0':''}"><b>Trecho ${j+1} de ${excertos.length}:</b><br>${escapeHtml(tx)}</div>`).join(''):'<span style="color:#94a3b8">Nenhum trecho disponível pra exibição.</span>';
     return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:8px;background:#fff">
-      <div style="font-weight:600;font-size:.85rem;margin-bottom:2px">${escapeHtml(g.territory_name)||'—'} — ${escapeHtml(g.state_code)||'—'} <span style="font-weight:400;color:#64748b">· ${escapeHtml(g.date)||'—'}</span></div>
-      <div style="font-size:.8rem;color:#64748b;margin:4px 0">${escapeHtml(trecho.substring(0,280))}${trecho.length>280?'…':''}</div>
-      <a href="${g.url||'#'}" target="_blank" style="font-size:.76rem;color:#0f2d4a">🔗 Ver diário original (PDF)</a>
+      <div style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}','block')">
+        <div style="font-weight:600;font-size:.85rem;margin-bottom:2px"><span id="${idRow}-seta" style="color:#94a3b8;font-size:.72rem">▸</span> ${escapeHtml(g.territory_name)||'—'} — ${escapeHtml(g.state_code)||'—'} <span style="font-weight:400;color:#64748b">· ${escapeHtml(g.date)||'—'}</span>${excertos.length>1?` <span style="font-weight:400;color:#94a3b8;font-size:.72rem">(${excertos.length} trechos)</span>`:''}</div>
+        <div style="font-size:.8rem;color:#64748b;margin:4px 0">${escapeHtml(trecho.substring(0,200))}${trecho.length>200?'…':''}</div>
+      </div>
+      <div id="${idRow}" style="display:none;background:#f8fafc;border-radius:6px;padding:10px;margin:8px 0 4px;font-size:.8rem;color:#334155;line-height:1.6">${resumoCompleto}</div>
+      <a href="${g.url||'#'}" target="_blank" onclick="event.stopPropagation()" style="font-size:.76rem;color:#0f2d4a">🔗 Ver diário original (PDF)</a>
     </div>`;
   }).join('')}`;
 }
@@ -861,11 +867,11 @@ const DD2_POLO_LABEL={A:'Ativo',P:'Passivo',T:'Terceiro',D:'Outro'};
 // Usada tanto na tabela de Processos Judiciais quanto na de Sanções — cada
 // linha clicável revela uma linha de detalhe logo abaixo (teor da
 // comunicação, ou motivo/fundamentação da sanção).
-function dd2ToggleDetalhe(id){
+function dd2ToggleDetalhe(id,displayAberto){
   const el=document.getElementById(id);
   if(!el) return;
   const abrir=el.style.display==='none';
-  el.style.display=abrir?'table-row':'none';
+  el.style.display=abrir?(displayAberto||'table-row'):'none';
   const seta=document.getElementById(id+'-seta');
   if(seta) seta.textContent=abrir?'▾':'▸';
 }
