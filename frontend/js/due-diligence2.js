@@ -945,12 +945,24 @@ function dd2TokensRelevantes(nome){
   return (nome||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9\s]/g,' ').split(/\s+/).filter(t=>t.length>=3&&!DD2_SANCOES_STOPWORDS.has(t));
 }
 
+// Uma lista de stopwords nunca dá conta de todo termo corporativo genérico
+// em todo idioma (testando a API na unha: "DISTRIBUIDORA" sozinho traz de
+// volta 12 empresas latino-americanas sem nenhuma relação entre si;
+// "INCORPORATED" sozinho traz dezenas de shell companies; "CASH" traz uma
+// entidade ligada ao Hamas). Em vez de tentar enumerar toda palavra
+// genérica possível, exigimos 2+ tokens distintivos em comum sempre que o
+// nome pesquisado tiver 2+ tokens disponíveis — uma única palavra batendo
+// por coincidência é comum, duas baterem ao mesmo tempo por acaso é raro o
+// suficiente pra ser um indício real. Só aceitamos 1 token em comum quando
+// o nome pesquisado não tem mais que isso pra oferecer.
 function dd2FiltrarRuidoSancoesIntl(hits,nomeConsultado){
   const tokensAlvo=dd2TokensRelevantes(nomeConsultado);
   if(!tokensAlvo.length)return hits;
+  const minComuns=tokensAlvo.length>=2?2:1;
   return hits.filter(h=>{
     const tokensHit=new Set((h.names||[]).flatMap(n=>dd2TokensRelevantes(n)));
-    return tokensAlvo.some(t=>tokensHit.has(t));
+    const comuns=tokensAlvo.filter(t=>tokensHit.has(t));
+    return comuns.length>=minComuns;
   });
 }
 
