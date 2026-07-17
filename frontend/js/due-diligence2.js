@@ -1296,7 +1296,10 @@ async function dd2FetchGoogleNewsRSS(query){
   const r=await fetch(dd2ProxyUrl(feedUrl),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(15000)});
   if(!r.ok)throw new Error('HTTP '+r.status);
   const text=await r.text();
-  if(!text.includes('<item>'))throw new Error('Resposta sem itens — possível bloqueio do provedor');
+  // Cuidado: um feed sem <item> é uma resposta VÁLIDA do Google (busca sem
+  // resultado nenhum) — só é falha de verdade quando nem chega a ser um RSS
+  // (ex.: página de bloqueio/consentimento no lugar do feed).
+  if(!text.includes('<rss'))throw new Error('Resposta não é um feed RSS válido — possível bloqueio do provedor');
   const items=dd2ParseGoogleNewsRSS(text);
   if(!items)throw new Error('XML inválido');
   return items;
@@ -1307,8 +1310,13 @@ async function dd2FetchGoogleNewsRSS(query){
 // due-diligence.js) e mescla os resultados deduplicados por link, pra
 // cobrir criminal/financeiro/regulatório/reputacional numa só varredura.
 async function dd2BuscarMidiaNegativa(nome,docFmt){
-  const bool=(typeof buildBooleanQuery==='function')?buildBooleanQuery(nome,docFmt):null;
-  const queries=bool?[bool.criminal,bool.financeiro,bool.regulatorio,bool.reputacional]:[`"${nome}" ${docFmt||''} corrupção OR fraude OR escândalo OR investigação`.trim()];
+  // Sem o documento na query: nenhuma notícia escreve o CPF/CNPJ formatado
+  // junto do nome, então exigi-lo com AND zera a busca quase sempre (testado
+  // ao vivo: com CNPJ 1 resultado, sem CNPJ 10, pra mesma empresa e mesmos
+  // termos). O documento continua nos links manuais, onde o Google Search
+  // completo (não só Notícias) lida melhor com o termo exato.
+  const bool=(typeof buildBooleanQuery==='function')?buildBooleanQuery(nome,null):null;
+  const queries=bool?[bool.criminal,bool.financeiro,bool.regulatorio,bool.reputacional]:[`"${nome}" corrupção OR fraude OR escândalo OR investigação`.trim()];
   const resultados=await Promise.allSettled(queries.map(q=>dd2FetchGoogleNewsRSS(q)));
   const porLink=new Map();
   let algumaOk=false;
