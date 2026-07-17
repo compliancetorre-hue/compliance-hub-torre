@@ -438,11 +438,12 @@ async function dd2Iniciar(){
           tipo==='cnpj'?chamar('cepim','cnpjSancionado='+doc):Promise.resolve([]),
           tipo==='cpf'?chamar('ceaf','cpfSancionado='+doc):Promise.resolve([]),
           nomeParaSancao?dd2FetchSanctionsNetwork(nomeParaSancao):Promise.resolve([]),
-        ]);
-      }).then(([ceisRes,cnepRes,lenRes,cepimRes,ceafRes,intRes])=>{
+        ]).then(resultados=>[resultados,nomeParaSancao]);
+      }).then(([[ceisRes,cnepRes,lenRes,cepimRes,ceafRes,intRes],nomeParaSancao])=>{
         const pega=r=>r.status==='fulfilled'&&Array.isArray(r.value)?r.value:[];
         dd2SancoesData={
-          ceis:pega(ceisRes),cnep:pega(cnepRes),leniencia:pega(lenRes),cepim:pega(cepimRes),ceaf:pega(ceafRes),internacional:pega(intRes),
+          ceis:pega(ceisRes),cnep:pega(cnepRes),leniencia:pega(lenRes),cepim:pega(cepimRes),ceaf:pega(ceafRes),
+          internacional:dd2FiltrarRuidoSancoesIntl(pega(intRes),nomeParaSancao),
           ceisFalhou:ceisRes.status==='rejected',cnepFalhou:cnepRes.status==='rejected',
         };
         dd2SetStep('sancoes',(ceisRes.status==='rejected'&&cnepRes.status==='rejected')?'error':'done');dd2SetProgress(65);
@@ -928,6 +929,29 @@ async function dd2FetchSanctionsNetwork(nome){
   if(!r.ok) throw new Error('HTTP '+r.status);
   const d=await r.json();
   return Array.isArray(d)?d:[];
+}
+
+// A API sanctions.network faz correspondência por token solto, sem peso de
+// relevância — pesquisar só "SUPERMERCADOS" ou só "CASH" já traz de volta
+// entidades OFAC sem qualquer relação real com o nome pesquisado, batendo
+// apenas numa palavra genérica do ramo de atuação (confirmado testando a
+// API diretamente). Por isso filtramos aqui no cliente: só mantemos um
+// resultado se pelo menos um token DISTINTIVO (fora da lista de termos
+// corporativos/setoriais genéricos) do nome pesquisado aparecer em algum
+// dos nomes/aliases devolvidos pela API.
+const DD2_SANCOES_STOPWORDS=new Set(['S/A','SA','LTDA','LDA','EIRELI','ME','EPP','CIA','COMERCIO','COMÉRCIO','INDUSTRIA','INDÚSTRIA','INDUSTRY','SUPERMERCADO','SUPERMERCADOS','SUPERMARKET','SUPERMARKETS','MERCADO','MERCADOS','MARKET','MARKETS','CASH','CARRY','RETAIL','STORE','STORES','GROUP','GRUPO','HOLDING','HOLDINGS','SERVICOS','SERVIÇOS','SERVICE','SERVICES','COMPANY','CO','CORP','CORPORATION','INC','LLC','LTD','TRADING','IMPORT','EXPORT','IMPORTACAO','EXPORTACAO','IMPORTAÇÃO','EXPORTAÇÃO','DISTRIBUIDORA','DISTRIBUTION','AGRICULTURE','AGRICULTURA','CONSTRUCTION','CONSTRUCAO','CONSTRUÇÃO','ENTERPRISE','ENTERPRISES','THE','AND','E','DE','DA','DO','DOS','DAS']);
+
+function dd2TokensRelevantes(nome){
+  return (nome||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9\s]/g,' ').split(/\s+/).filter(t=>t.length>=3&&!DD2_SANCOES_STOPWORDS.has(t));
+}
+
+function dd2FiltrarRuidoSancoesIntl(hits,nomeConsultado){
+  const tokensAlvo=dd2TokensRelevantes(nomeConsultado);
+  if(!tokensAlvo.length)return hits;
+  return hits.filter(h=>{
+    const tokensHit=new Set((h.names||[]).flatMap(n=>dd2TokensRelevantes(n)));
+    return tokensAlvo.some(t=>tokensHit.has(t));
+  });
 }
 
 const DD2_POLO_LABEL={A:'Ativo',P:'Passivo',T:'Terceiro',D:'Outro'};
