@@ -574,15 +574,19 @@ function dd2BolsaMeses(){
 // inteira é reportada separadamente, pra não virar um falso "não recebe".
 // Resolve o NIS real da pessoa a partir do CPF (a base "novo" exige o NIS,
 // que normalmente é um número diferente do CPF — buscar pelo CPF direto
-// nessa base praticamente nunca encontra nada).
+// nessa base praticamente nunca encontra nada). Antes, qualquer falha na
+// chamada (401 de chave/rate-limit, timeout, etc.) virava silenciosamente
+// "NIS não encontrado" — indistinguível de "consultei e essa pessoa
+// realmente não tem NIS cadastrado". Agora devolve {nis, falhou} pra a UI
+// mostrar a mensagem certa em cada caso.
 async function dd2ResolverNis(cpf){
   try{
     const r=await fetch(dd2PortalUrl('pessoa-fisica','cpf='+cpf),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)});
-    if(!r.ok) return null;
+    if(!r.ok) return {nis:null,falhou:true};
     const d=await r.json();
     const registro=Array.isArray(d)?d[0]:d;
-    return registro?.nis||null;
-  }catch(e){ return null; }
+    return {nis:registro?.nis||null,falhou:false};
+  }catch(e){ return {nis:null,falhou:true}; }
 }
 
 async function dd2FetchBolsaFamilia(cpf){
@@ -591,7 +595,7 @@ async function dd2FetchBolsaFamilia(cpf){
     .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
     .then(d=>Array.isArray(d)?d:[]);
 
-  const nis=await dd2ResolverNis(cpf);
+  const {nis,falhou:nisFalhou}=await dd2ResolverNis(cpf);
   const antigas=meses.map(anoMes=>chamar('bolsa-familia','codigo='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'));
   const novas=nis
     ? meses.map(anoMes=>chamar('bolsa-familia-novo','nis='+nis+'&anoMesReferencia='+anoMes+'&pagina=1').then(d=>d.map(item=>({...item,_novo:true}))))
@@ -600,14 +604,25 @@ async function dd2FetchBolsaFamilia(cpf){
   const [resAntigas,resNovas]=await Promise.all([Promise.allSettled(antigas),Promise.allSettled(novas)]);
   const okAntigas=resAntigas.filter(r=>r.status==='fulfilled');
   const okNovas=resNovas.filter(r=>r.status==='fulfilled');
+  // Falha PARCIAL (algumas chamadas de mês individuais falharam, não todas)
+  // já é motivo pra avisar que o resultado pode estar incompleto — a busca
+  // dispara até ~28 chamadas simultâneas (1 por mês × 2 bases), então um
+  // rate-limit parcial no meio do caminho antes só era mascarado como "sem
+  // parcelas nesses meses" em vez de reportado como falha.
+  const antigasParcialFalhou=okAntigas.length<meses.length;
+  const novasParcialFalhou=!!nis&&okNovas.length<meses.length;
 
-  if(okAntigas.length===0 && okNovas.length===0 && nis) throw new Error('Todas as consultas de Bolsa Família falharam');
+  // Zero sucesso nas DUAS bases é falha de verdade — antes só disparava
+  // quando o NIS tinha sido resolvido, deixando escapar em silêncio o caso
+  // (mais comum) de resolução de NIS falhar E a base antiga falhar junto.
+  if(okAntigas.length===0 && okNovas.length===0 && meses.length>0) throw new Error('Todas as consultas de Bolsa Família falharam');
 
   return {
     items:[...okAntigas.flatMap(r=>r.value), ...okNovas.flatMap(r=>r.value)],
-    baseAntigaFalhou: okAntigas.length===0,
-    baseNovaFalhou: !!nis && okNovas.length===0,
-    nisNaoEncontrado: !nis,
+    baseAntigaFalhou:antigasParcialFalhou,
+    baseNovaFalhou:novasParcialFalhou,
+    nisNaoEncontrado:!nis&&!nisFalhou,
+    nisFalhouAoConsultar:nisFalhou,
   };
 }
 
@@ -843,25 +858,77 @@ async function dd2FetchSanctionsNetwork(nome){
 
 const DD2_POLO_LABEL={A:'Ativo',P:'Passivo',T:'Terceiro',D:'Outro'};
 
+// Usada tanto na tabela de Processos Judiciais quanto na de Sanções — cada
+// linha clicável revela uma linha de detalhe logo abaixo (teor da
+// comunicação, ou motivo/fundamentação da sanção).
+function dd2ToggleDetalhe(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  const abrir=el.style.display==='none';
+  el.style.display=abrir?'table-row':'none';
+  const seta=document.getElementById(id+'-seta');
+  if(seta) seta.textContent=abrir?'▾':'▸';
+}
+
 function dd2RenderJudicial(res,nome,docNum,tipo,socios){
   const el=document.getElementById('dd2-judicial-content');
   const {items,rateLimited,algumaFalhou}=res;
   let avisos='';
   if(rateLimited) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Limite de requisições do DJEN atingido — resultado pode estar incompleto. Tente novamente em cerca de 1 minuto.</p>';
   else if(algumaFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais buscas no DJEN falharam — resultado pode estar incompleto.</p>';
-  const tabela=items.length?`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Data</th><th>Tribunal</th><th>Tipo</th><th>Classe / Processo</th><th>Encontrado por</th><th>Fonte</th></tr></thead>
-  <tbody>${items.slice(0,60).map(p=>{
+  const tabela=items.length?`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th></th><th>Data</th><th>Tribunal</th><th>Tipo</th><th>Classe / Processo</th><th>Encontrado por</th><th>Fonte</th></tr></thead>
+  <tbody>${items.slice(0,60).map((p,i)=>{
     const dest=(p.destinatarios||[]).map(d=>`${escapeHtml(d.nome)} (${DD2_POLO_LABEL[d.polo]||'—'})`).join(', ')||'—';
     const link=p.link||'';
-    const clickRow=link?` style="cursor:pointer" onclick="window.open('${escapeHtml(link)}','_blank')"`:'';
     const fonte=link?`<a href="${escapeHtml(link)}" target="_blank" onclick="event.stopPropagation()" class="dd2-link-ext" style="padding:4px 9px;font-size:.73rem">🔗 Abrir</a>`:'<span style="color:#94a3b8;font-size:.73rem">—</span>';
-    return `<tr${clickRow}><td style="font-size:.75rem">${escapeHtml(p.data_disponibilizacao)||'—'}</td><td><span class="dd2-badge info">${escapeHtml(p.siglaTribunal)}</span></td><td>${escapeHtml(p.tipoComunicacao)||'—'}</td><td>${escapeHtml(p.nomeClasse)||'—'}<br><span style="font-size:.73rem;color:#64748b">${escapeHtml(p.numeroprocessocommascara||p.numero_processo)||'—'} — ${dest}</span></td><td style="font-size:.75rem">${p._origem.map(o=>escapeHtml(o)).join(', ')}</td><td>${fonte}</td></tr>`;
+    const idRow='dd2-jud-det-'+i;
+    const resumo=(p.texto||'').trim();
+    return `<tr style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}')"><td style="width:18px;color:#94a3b8;font-size:.75rem" id="${idRow}-seta">▸</td><td style="font-size:.75rem">${escapeHtml(p.data_disponibilizacao)||'—'}</td><td><span class="dd2-badge info">${escapeHtml(p.siglaTribunal)}</span></td><td>${escapeHtml(p.tipoComunicacao)||'—'}</td><td>${escapeHtml(p.nomeClasse)||'—'}<br><span style="font-size:.73rem;color:#64748b">${escapeHtml(p.numeroprocessocommascara||p.numero_processo)||'—'} — ${dest}</span></td><td style="font-size:.75rem">${p._origem.map(o=>escapeHtml(o)).join(', ')}</td><td>${fonte}</td></tr>
+    <tr id="${idRow}" style="display:none;background:#f8fafc"><td></td><td colspan="6" style="padding:10px 12px;font-size:.8rem;color:#334155;line-height:1.6;white-space:pre-wrap">${resumo?`<b>Resumo do teor da comunicação:</b><br>${escapeHtml(resumo.substring(0,800))}${resumo.length>800?'…':''}`:'<span style="color:#94a3b8">Teor da comunicação não disponível para exibição.</span>'}</td></tr>`;
   }).join('')}</tbody></table></div>`:`<p style="color:#22c55e;font-weight:600">✅ Nenhuma comunicação processual encontrada no DJEN.</p>`;
   el.innerHTML=`
     ${avisos}
     <p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>DJEN — Diário de Justiça Eletrônico Nacional</strong> (CNJ): citações, intimações e editais de tribunais de todo o país. A cobertura não é de 100% dos tribunais/processos — use os links abaixo para reforçar a verificação.</p>
     ${tabela}
     <div style="margin-top:14px">${dd2LinksManuaisHTML(nome,docNum,tipo,socios)}</div>
+  `;
+}
+
+// Motivo/fundamentação de cada sanção, pra linha de detalhe expansível —
+// campos que a API já devolve mas a tabela resumida não mostra.
+function dd2MotivoSancaoHTML(item,base){
+  if(base==='CEIS'||base==='CNEP'){
+    const fund=(item.fundamentacao||[]).map(f=>f.descricao||f.nome).filter(Boolean).join('; ');
+    return `
+      ${item.fonteSancao?.nomeExibicao?`<div><b>Fonte:</b> ${escapeHtml(item.fonteSancao.nomeExibicao)}</div>`:''}
+      ${fund?`<div><b>Fundamentação legal:</b> ${escapeHtml(fund)}</div>`:''}
+      ${item.dataTransitoJulgado?`<div><b>Trânsito em julgado:</b> ${escapeHtml(item.dataTransitoJulgado)}</div>`:''}
+      ${item.dataPublicacaoSancao?`<div><b>Publicação:</b> ${escapeHtml(item.dataPublicacaoSancao)}</div>`:''}
+      ${!fund&&!item.dataTransitoJulgado&&!item.dataPublicacaoSancao?'<span style="color:#94a3b8">Sem detalhes adicionais disponíveis nesta base.</span>':''}
+    `;
+  }
+  if(base==='Leniência'){
+    const empresas=(item.sancoes||[]).map(s=>`${s.razaoSocial||s.nomeInformadoOrgaoResponsavel||'—'}${s.cnpjFormatado?' ('+s.cnpjFormatado+')':''}`).join('<br>');
+    return `<div><b>Situação do acordo:</b> ${escapeHtml(item.situacaoAcordo)||'—'}</div>${empresas?`<div style="margin-top:4px"><b>Empresas envolvidas:</b><br>${empresas}</div>`:''}`;
+  }
+  if(base==='CEPIM'){
+    return `<div><b>Motivo:</b> ${escapeHtml(item.motivo)||'—'}</div>${item.convenio?.numero?`<div><b>Convênio:</b> ${escapeHtml(item.convenio.numero)}</div>`:''}`;
+  }
+  if(base==='CEAF'){
+    const p=item.punicao||{};
+    return `
+      <div><b>Punido:</b> ${escapeHtml(p.nomePunido)||'—'}</div>
+      ${p.portaria?`<div><b>Portaria:</b> ${escapeHtml(p.portaria)}</div>`:''}
+      ${p.processo?`<div><b>Processo:</b> ${escapeHtml(p.processo)}</div>`:''}
+      ${p.paginaDOU?`<div><b>Diário Oficial:</b> página ${escapeHtml(p.paginaDOU)}${p.secaoDOU?', seção '+escapeHtml(p.secaoDOU):''}</div>`:''}
+    `;
+  }
+  // Internacional (sanctions.network — OFAC/ONU/UE)
+  return `
+    ${item.remarks?`<div><b>Motivo / observação:</b> ${escapeHtml(item.remarks)}</div>`:'<div style="color:#94a3b8">Nenhum motivo detalhado disponível nesta base.</div>'}
+    ${(item.positions||[]).length?`<div style="margin-top:4px"><b>Cargo / posição:</b> ${escapeHtml(item.positions.join(', '))}</div>`:''}
+    ${(item.names||[]).length>1?`<div style="margin-top:4px"><b>Também conhecido como:</b> ${escapeHtml(item.names.slice(1).join(', '))}</div>`:''}
+    <div style="margin-top:8px"><a href="https://sanctionssearch.ofac.treas.gov/" target="_blank" onclick="event.stopPropagation()" class="dd2-link-ext" style="padding:4px 9px;font-size:.72rem">🔗 Conferir na busca oficial do OFAC</a></div>
   `;
 }
 
@@ -898,20 +965,22 @@ function dd2RenderSancoes(d){
   if(d?.ceisFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CEIS — resultado pode estar incompleto.</p>';
   else if(d?.cnepFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CNEP — resultado pode estar incompleto.</p>';
   const all=[
-    ...(d?.ceis||[]).map(s=>({...dd2NormalizarSancao(s,'CEIS'),_base:'CEIS'})),
-    ...(d?.cnep||[]).map(s=>({...dd2NormalizarSancao(s,'CNEP'),_base:'CNEP'})),
-    ...(d?.leniencia||[]).map(s=>({...dd2NormalizarSancao(s,'Leniência'),_base:'Leniência'})),
-    ...(d?.cepim||[]).map(s=>({...dd2NormalizarSancao(s,'CEPIM'),_base:'CEPIM'})),
-    ...(d?.ceaf||[]).map(s=>({...dd2NormalizarSancao(s,'CEAF'),_base:'CEAF'})),
-    ...(d?.internacional||[]).map(s=>({...dd2NormalizarSancao(s,'Internacional'),_base:'Internacional'})),
+    ...(d?.ceis||[]).map(s=>({...dd2NormalizarSancao(s,'CEIS'),_base:'CEIS',_raw:s})),
+    ...(d?.cnep||[]).map(s=>({...dd2NormalizarSancao(s,'CNEP'),_base:'CNEP',_raw:s})),
+    ...(d?.leniencia||[]).map(s=>({...dd2NormalizarSancao(s,'Leniência'),_base:'Leniência',_raw:s})),
+    ...(d?.cepim||[]).map(s=>({...dd2NormalizarSancao(s,'CEPIM'),_base:'CEPIM',_raw:s})),
+    ...(d?.ceaf||[]).map(s=>({...dd2NormalizarSancao(s,'CEAF'),_base:'CEAF',_raw:s})),
+    ...(d?.internacional||[]).map(s=>({...dd2NormalizarSancao(s,'Internacional'),_base:'Internacional',_raw:s})),
   ];
   if(!all.length){el.innerHTML=avisos+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma sanção ou restrição encontrada nas bases consultadas.</p>';return;}
   const temIntl=all.some(s=>s._base==='Internacional');
-  el.innerHTML=avisos+`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Base</th><th>Descrição</th><th>Órgão</th><th>Período</th><th>Status</th></tr></thead>
-  <tbody>${all.map(s=>{
+  el.innerHTML=avisos+`<p style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Clique numa linha para ver o motivo/fundamentação completa.</p><div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th></th><th>Base</th><th>Descrição</th><th>Órgão</th><th>Período</th><th>Status</th></tr></thead>
+  <tbody>${all.map((s,i)=>{
     const semVigencia=s._base==='CEPIM'||s._base==='CEAF'||s._base==='Internacional';
     const statusTxt=s.fim?'Encerrada':(semVigencia?'Registrado':'Vigente');
-    return `<tr><td><span class="dd2-badge danger">${s._base}</span></td><td>${escapeHtml(s.descricao)}</td><td>${escapeHtml(s.orgao)}</td><td>${escapeHtml(s.inicio)||'—'}${s.fim!=null?' – '+escapeHtml(s.fim):''}</td><td><span class="dd2-badge ${!s.fim&&!semVigencia?'danger':'warn'}">${statusTxt}</span></td></tr>`;
+    const idRow='dd2-san-det-'+i;
+    return `<tr style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}')"><td style="width:18px;color:#94a3b8;font-size:.75rem" id="${idRow}-seta">▸</td><td><span class="dd2-badge danger">${s._base}</span></td><td>${escapeHtml(s.descricao)}</td><td>${escapeHtml(s.orgao)}</td><td>${escapeHtml(s.inicio)||'—'}${s.fim!=null?' – '+escapeHtml(s.fim):''}</td><td><span class="dd2-badge ${!s.fim&&!semVigencia?'danger':'warn'}">${statusTxt}</span></td></tr>
+    <tr id="${idRow}" style="display:none;background:#f8fafc"><td></td><td colspan="5" style="padding:10px 12px;font-size:.8rem;color:#334155;line-height:1.6">${dd2MotivoSancaoHTML(s._raw,s._base)}</td></tr>`;
   }).join('')}</tbody></table></div>
   ${temIntl?`<p style="font-size:.72rem;color:#94a3b8;margin-top:10px">⚠️ Resultados "Internacional" vêm de um agregador de terceiros (sanctions.network) não-oficial — use como indício, confirme na fonte primária (OFAC/ONU/UE) antes de qualquer decisão.</p>`:''}`;
 }
@@ -935,11 +1004,12 @@ function dd2RenderBolsaFamilia(res){
     el.innerHTML=`<p style="color:#ef4444;margin-bottom:10px">⚠️ Não foi possível consultar o Bolsa Família automaticamente no momento.</p>${dd2LinkManualBolsa()}`;
     return;
   }
-  const {items:data, baseAntigaFalhou, baseNovaFalhou, nisNaoEncontrado}=res;
+  const {items:data, baseAntigaFalhou, baseNovaFalhou, nisNaoEncontrado, nisFalhouAoConsultar}=res;
   let avisos='';
-  if(baseAntigaFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base do Bolsa Família antigo — resultado pode estar incompleto.</p>';
-  if(nisNaoEncontrado) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível localizar o NIS desta pessoa — a base do Novo Bolsa Família (atual) não foi consultada. Confira manualmente.</p>';
-  else if(baseNovaFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base do Novo Bolsa Família (atual) — resultado pode estar incompleto.</p>';
+  if(baseAntigaFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais consultas à base do Bolsa Família antigo falharam — resultado pode estar incompleto (possível limite de requisições).</p>';
+  if(nisFalhouAoConsultar) avisos+='<p style="color:#ef4444;font-size:.82rem;margin-bottom:6px">⚠️ A consulta pra resolver o NIS desta pessoa falhou (não é "sem NIS cadastrado" — a chamada em si deu erro, possivelmente chave/token ou limite de requisições) — a base do Novo Bolsa Família não foi verificada. Tente novamente.</p>';
+  else if(nisNaoEncontrado) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi encontrado NIS cadastrado pra este CPF — a base do Novo Bolsa Família (atual) não foi consultada. Confira manualmente.</p>';
+  else if(baseNovaFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais consultas à base do Novo Bolsa Família (atual) falharam — resultado pode estar incompleto (possível limite de requisições).</p>';
   if(!data.length){el.innerHTML=`${avisos}<p style="color:#22c55e;font-weight:600;margin-bottom:10px">✅ Nenhuma parcela de Bolsa Família encontrada para este CPF.</p>${dd2LinkManualBolsa()}`;return;}
   el.innerHTML=`${avisos}<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Programa</th><th>Mês Referência</th><th>UF</th><th>Município</th><th>NIS</th><th>Beneficiário</th><th>Valor</th></tr></thead>
   <tbody>${data.slice(0,50).map(p=>{
