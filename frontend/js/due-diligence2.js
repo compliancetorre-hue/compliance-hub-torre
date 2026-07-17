@@ -590,6 +590,36 @@ async function dd2ResolverNis(cpf){
   }catch(e){ return {nis:null,falhou:true}; }
 }
 
+// Dispara as chamadas em lotes pequenos, com um intervalo entre lotes, e
+// tenta de novo uma vez só os índices que falharam — 14 meses × 2 bases é
+// até 28 chamadas de uma vez só pro Bolsa Família (mais tudo que o resto do
+// Due Diligence 2 dispara em paralelo), o que na prática estoura o rate
+// limit do Portal da Transparência com frequência. Isso é o que fazia a
+// base do Novo Bolsa Família falhar parcialmente mesmo quando a pessoa
+// realmente não tinha nada a esconder — reduzir a concorrência e tentar de
+// novo os que falharam recupera a maioria dos casos de rate-limit
+// transitório sem precisar aumentar timeout nem mudar o resultado.
+async function dd2ChamarEmLotes(fns,tamanhoLote=4,intervaloMs=350){
+  const resultados=[];
+  for(let i=0;i<fns.length;i+=tamanhoLote){
+    const lote=fns.slice(i,i+tamanhoLote).map(fn=>fn());
+    resultados.push(...await Promise.allSettled(lote));
+    if(i+tamanhoLote<fns.length) await new Promise(r=>setTimeout(r,intervaloMs));
+  }
+  return resultados;
+}
+
+async function dd2ExecutarComRetry(fns){
+  const resultados=await dd2ChamarEmLotes(fns);
+  const pendentes=resultados.map((r,i)=>r.status==='rejected'?i:-1).filter(i=>i>=0);
+  if(pendentes.length){
+    await new Promise(r=>setTimeout(r,700));
+    const retry=await dd2ChamarEmLotes(pendentes.map(i=>fns[i]));
+    pendentes.forEach((idxOriginal,j)=>{ resultados[idxOriginal]=retry[j]; });
+  }
+  return resultados;
+}
+
 async function dd2FetchBolsaFamilia(cpf){
   const meses=dd2BolsaMeses();
   const chamar=(rota,params)=>fetch(dd2PortalUrl(rota,params),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)})
@@ -597,12 +627,12 @@ async function dd2FetchBolsaFamilia(cpf){
     .then(d=>Array.isArray(d)?d:[]);
 
   const {nis,falhou:nisFalhou}=await dd2ResolverNis(cpf);
-  const antigas=meses.map(anoMes=>chamar('bolsa-familia','codigo='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'));
-  const novas=nis
-    ? meses.map(anoMes=>chamar('bolsa-familia-novo','nis='+nis+'&anoMesReferencia='+anoMes+'&pagina=1').then(d=>d.map(item=>({...item,_novo:true}))))
+  const antigasFns=meses.map(anoMes=>()=>chamar('bolsa-familia','codigo='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'));
+  const novasFns=nis
+    ? meses.map(anoMes=>()=>chamar('bolsa-familia-novo','nis='+nis+'&anoMesReferencia='+anoMes+'&pagina=1').then(d=>d.map(item=>({...item,_novo:true}))))
     : [];
 
-  const [resAntigas,resNovas]=await Promise.all([Promise.allSettled(antigas),Promise.allSettled(novas)]);
+  const [resAntigas,resNovas]=await Promise.all([dd2ExecutarComRetry(antigasFns),dd2ExecutarComRetry(novasFns)]);
   const okAntigas=resAntigas.filter(r=>r.status==='fulfilled');
   const okNovas=resNovas.filter(r=>r.status==='fulfilled');
   // Falha PARCIAL (algumas chamadas de mês individuais falharam, não todas)
