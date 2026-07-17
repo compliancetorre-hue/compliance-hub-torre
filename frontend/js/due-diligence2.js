@@ -1,4 +1,4 @@
-// ═══════════════════════════════════════════════════════
+﻿// ═══════════════════════════════════════════════════════
 // DUE DILIGENCE 2 — KYC & MÍDIAS NEGATIVAS
 // ═══════════════════════════════════════════════════════
 
@@ -583,11 +583,16 @@ function dd2BolsaMeses(){
 async function dd2ResolverNis(cpf){
   try{
     const r=await fetch(dd2PortalUrl('pessoa-fisica','cpf='+cpf),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)});
-    if(!r.ok) return {nis:null,falhou:true};
+    if(!r.ok){
+      const corpo=await r.text().catch(()=>'(sem corpo)');
+      console.warn('[DD2-DEBUG] pessoa-fisica cpf='+cpf,'status:',r.status,'corpo:',corpo);
+      return {nis:null,falhou:true};
+    }
     const d=await r.json();
     const registro=Array.isArray(d)?d[0]:d;
+    console.warn('[DD2-DEBUG] pessoa-fisica cpf='+cpf,'status:',r.status,'resposta:',JSON.stringify(d));
     return {nis:registro?.nis||null,falhou:false};
-  }catch(e){ return {nis:null,falhou:true}; }
+  }catch(e){ console.warn('[DD2-DEBUG] pessoa-fisica cpf='+cpf,'excecao:',e.message); return {nis:null,falhou:true}; }
 }
 
 // Dispara as chamadas em lotes pequenos, com um intervalo entre lotes, e
@@ -837,9 +842,15 @@ const DD2_QUERIDODIARIO_URL='https://api.queridodiario.ok.org.br/gazettes';
 // (Querido Diário, Open Knowledge Brasil). API pública, sem chave, CORS
 // liberado — diferente do DJEN (judicial), essa cobre atos municipais:
 // licitação, nomeação, sanção administrativa local etc.
+// O querystring SEM aspas é tratado como termos soltos (full-text OR) —
+// testado na unha com um CPF formatado real: sem aspas, "total_gazettes"
+// vinha 10000 (o teto da API), batendo em qualquer trecho de OCR com
+// números parecidos; com aspas (frase exata) foi pra 0, que é o esperado
+// pra um CPF completo (raramente publicado por extenso). Envolver em aspas
+// faz a mesma diferença de precisão que o DOU (dd2FetchDOU) já usa.
 async function dd2FetchQueridoDiario(querystring){
   if(!querystring) return [];
-  const qs=new URLSearchParams({querystring,size:'15'}).toString();
+  const qs=new URLSearchParams({querystring:'"'+querystring+'"',size:'15'}).toString();
   const r=await fetch(`${DD2_QUERIDODIARIO_URL}?${qs}`,{headers:{'Accept':'application/json'},signal:AbortSignal.timeout(15000)});
   if(!r.ok) throw new Error('HTTP '+r.status);
   const d=await r.json();
@@ -869,12 +880,25 @@ async function dd2FetchDOU(querystring){
   return Array.isArray(data?.jsonArray)?data.jsonArray:[];
 }
 
+// O PDF escaneado de origem (principalmente diários municipais antigos)
+// às vezes tem OCR corrompido, que vaza como caractere de controle ou de
+// substituição (U+FFFD) no trecho — mostrar isso é só ruído ilegível pro
+// analista. Remove esses caracteres e descarta o trecho inteiro se, depois
+// de limpo, sobrar muito pouca letra de verdade (sinal de que é lixo binário).
+function dd2LimparTrecho(txt){
+  if(!txt) return '';
+  const limpo=txt.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F ]/g,"").trim();
+  const letras=(limpo.match(/[a-zA-ZÀ-ÿ]/g)||[]).length;
+  if(limpo.length>20 && letras/limpo.length<0.4) return '';
+  return limpo;
+}
+
 // DOU e Querido Diário devolvem formatos totalmente diferentes (datas em
 // formatos opostos, HTML de destaque embutido no texto etc.) — normaliza
 // os dois pro mesmo formato de exibição.
 function dd2NormalizarDiario(item,fonte){
   if(fonte==='DOU'){
-    const trecho=(item.content||'').replace(/<[^>]+>/g,'');
+    const trecho=dd2LimparTrecho((item.content||'').replace(/<[^>]+>/g,''));
     return {
       titulo:item.title||'—',
       local:(item.hierarchyStr||'').replace(/\//g,' › ')||'Diário Oficial da União',
@@ -887,7 +911,7 @@ function dd2NormalizarDiario(item,fonte){
     titulo:`${item.territory_name||'—'} — ${item.state_code||'—'}`,
     local:'Diário Oficial Municipal',
     data:item.date||'—',
-    trechos:(item.excerpts||[]).filter(Boolean),
+    trechos:(item.excerpts||[]).map(dd2LimparTrecho).filter(Boolean),
     url:item.url||'',
   };
 }
@@ -903,8 +927,14 @@ function dd2DataDiarioOrdenavel(data){
 
 async function dd2BuscarDiarios(nome,docNum,tipo){
   const docFmt=dd2FmtDoc(docNum,tipo);
-  const buscasQD=[dd2FetchQueridoDiario(docFmt)];
-  const buscasDOU=[dd2FetchDOU(docFmt)];
+  // CPF completo quase nunca é publicado por extenso em diário oficial (LGPD
+  // costuma mascarar: "***.456.789-**") — buscar por ele pra pessoa física
+  // não tem valor (com a busca em frase exata, dá 0 resultado sempre) e sem
+  // frase exata dava falso positivo por fragmento de número. Pra CPF, a
+  // busca é só pelo nome. CNPJ continua buscando pelo documento também,
+  // já que licitação/contrato publica o CNPJ completo com frequência.
+  const buscasQD=tipo==='cnpj'?[dd2FetchQueridoDiario(docFmt)]:[];
+  const buscasDOU=tipo==='cnpj'?[dd2FetchDOU(docFmt)]:[];
   if(nome){ buscasQD.push(dd2FetchQueridoDiario(nome)); buscasDOU.push(dd2FetchDOU(nome)); }
 
   const [resQD,resDOU]=await Promise.all([Promise.allSettled(buscasQD),Promise.allSettled(buscasDOU)]);
