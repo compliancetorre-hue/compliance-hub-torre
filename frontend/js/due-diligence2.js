@@ -124,7 +124,7 @@ function dd2HTML(){return `
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-sancoes" checked> &#128171; Sanções e Restrições</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-pep" checked> &#127963; PEP</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-midia"> &#128240; Mídia Negativa</label>
-      <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-diarios" checked> &#128240; Diários Oficiais Municipais</label>
+      <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-diarios" checked> &#128240; Diários Oficiais (DOU + Municipais)</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-bolsa" checked> &#128176; Bolsa Família (CPF)</label>
     </div>
     <div class="dd2-form-row" style="margin-top:-6px;margin-bottom:16px">
@@ -200,8 +200,8 @@ function dd2HTML(){return `
       <div id="dd2-midia-content"><div class="dd2-loading">&#9203; Buscando notícias negativas...</div></div>
     </div>
     <div class="dd2-card" id="dd2-sec-diarios">
-      <div class="dd2-card-title">&#128240; Diários Oficiais Municipais (Querido Diário)</div>
-      <div id="dd2-diarios-content"><div class="dd2-loading">&#9203; Consultando diários oficiais de mais de 350 municípios...</div></div>
+      <div class="dd2-card-title">&#128240; Diários Oficiais (DOU + Querido Diário)</div>
+      <div id="dd2-diarios-content"><div class="dd2-loading">&#9203; Consultando o DOU e diários oficiais de mais de 350 municípios...</div></div>
     </div>
     <div class="dd2-card" id="dd2-sec-bolsa" style="display:none">
       <div class="dd2-card-title">&#128176; Bolsa Família</div>
@@ -795,8 +795,8 @@ const DD2_QUERIDODIARIO_URL='https://api.queridodiario.ok.org.br/gazettes';
 
 // Busca texto integral em diários oficiais de mais de 350 municípios
 // (Querido Diário, Open Knowledge Brasil). API pública, sem chave, CORS
-// liberado — diferente do DJEN (judicial) e do DOU (federal), essa cobre
-// atos municipais: licitação, nomeação, sanção administrativa local etc.
+// liberado — diferente do DJEN (judicial), essa cobre atos municipais:
+// licitação, nomeação, sanção administrativa local etc.
 async function dd2FetchQueridoDiario(querystring){
   if(!querystring) return [];
   const qs=new URLSearchParams({querystring,size:'15'}).toString();
@@ -806,45 +806,113 @@ async function dd2FetchQueridoDiario(querystring){
   return Array.isArray(d?.gazettes)?d.gazettes:[];
 }
 
+const DD2_DOU_URL='https://www.in.gov.br/consulta/-/buscar/dou';
+
+// Busca no Diário Oficial da União (atos federais). Não tem API JSON
+// documentada, mas a página de busca embute um bloco
+// <script type="application/json" id="..._params"> com os resultados
+// estruturados (título, órgão, data, trecho) — foi assim que confirmamos
+// que a busca funciona de verdade (testamos com CNPJ real e achou
+// publicações federais correspondentes). CORS liberado, sem chave. Como
+// depende da estrutura interna da página do in.gov.br (não é um contrato
+// de API formal), pode quebrar se eles reformularem o site.
+async function dd2FetchDOU(querystring){
+  if(!querystring) return [];
+  const url=`${DD2_DOU_URL}?q=${encodeURIComponent('"'+querystring+'"')}`;
+  const r=await fetch(url,{headers:{'Accept':'text/html'},signal:AbortSignal.timeout(20000)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const html=await r.text();
+  const m=html.match(/id="[^"]*BuscaDouPortlet_params"[^>]*>([\s\S]*?)<\/script>/);
+  if(!m) return [];
+  let data;
+  try{ data=JSON.parse(m[1].trim()); }catch(e){ return []; }
+  return Array.isArray(data?.jsonArray)?data.jsonArray:[];
+}
+
+// DOU e Querido Diário devolvem formatos totalmente diferentes (datas em
+// formatos opostos, HTML de destaque embutido no texto etc.) — normaliza
+// os dois pro mesmo formato de exibição.
+function dd2NormalizarDiario(item,fonte){
+  if(fonte==='DOU'){
+    const trecho=(item.content||'').replace(/<[^>]+>/g,'');
+    return {
+      titulo:item.title||'—',
+      local:(item.hierarchyStr||'').replace(/\//g,' › ')||'Diário Oficial da União',
+      data:item.pubDate||'—',
+      trechos:[trecho].filter(Boolean),
+      url:item.urlTitle?`https://www.in.gov.br/web/dou/-/${item.urlTitle}`:'',
+    };
+  }
+  return {
+    titulo:`${item.territory_name||'—'} — ${item.state_code||'—'}`,
+    local:'Diário Oficial Municipal',
+    data:item.date||'—',
+    trechos:(item.excerpts||[]).filter(Boolean),
+    url:item.url||'',
+  };
+}
+
+// DOU usa DD/MM/AAAA, Querido Diário usa AAAA-MM-DD — converte os dois pro
+// mesmo formato só pra poder ordenar cronologicamente.
+function dd2DataDiarioOrdenavel(data){
+  if(!data) return '';
+  if(/^\d{4}-\d{2}-\d{2}/.test(data)) return data;
+  const m=data.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  return m?`${m[3]}-${m[2]}-${m[1]}`:data;
+}
+
 async function dd2BuscarDiarios(nome,docNum,tipo){
   const docFmt=dd2FmtDoc(docNum,tipo);
-  const buscas=[dd2FetchQueridoDiario(docFmt)];
-  if(nome) buscas.push(dd2FetchQueridoDiario(nome));
-  const resultados=await Promise.allSettled(buscas);
+  const buscasQD=[dd2FetchQueridoDiario(docFmt)];
+  const buscasDOU=[dd2FetchDOU(docFmt)];
+  if(nome){ buscasQD.push(dd2FetchQueridoDiario(nome)); buscasDOU.push(dd2FetchDOU(nome)); }
+
+  const [resQD,resDOU]=await Promise.all([Promise.allSettled(buscasQD),Promise.allSettled(buscasDOU)]);
   let algumaFalhou=false;
   const porChave=new Map();
-  resultados.forEach(res=>{
+  resQD.forEach(res=>{
     if(res.status==='fulfilled'){
       res.value.forEach(g=>{
-        const chave=(g.territory_id||'')+'|'+(g.date||'')+'|'+(g.url||'');
-        if(!porChave.has(chave)) porChave.set(chave,g);
+        const chave='qd|'+(g.territory_id||'')+'|'+(g.date||'')+'|'+(g.url||'');
+        if(!porChave.has(chave)) porChave.set(chave,{...dd2NormalizarDiario(g,'Querido Diário'),_fonte:'Querido Diário'});
       });
     } else algumaFalhou=true;
   });
-  if(algumaFalhou&&resultados.every(r=>r.status==='rejected')) throw new Error('Todas as buscas no Querido Diário falharam');
-  const items=[...porChave.values()].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  resDOU.forEach(res=>{
+    if(res.status==='fulfilled'){
+      res.value.forEach(g=>{
+        const chave='dou|'+(g.classPK||g.urlTitle||'');
+        if(!porChave.has(chave)) porChave.set(chave,{...dd2NormalizarDiario(g,'DOU'),_fonte:'DOU'});
+      });
+    } else algumaFalhou=true;
+  });
+
+  const resultadosTodos=[...resQD,...resDOU];
+  if(algumaFalhou&&resultadosTodos.every(r=>r.status==='rejected')) throw new Error('Todas as buscas em diários oficiais falharam');
+  const items=[...porChave.values()].sort((a,b)=>dd2DataDiarioOrdenavel(b.data).localeCompare(dd2DataDiarioOrdenavel(a.data)));
   return {items,algumaFalhou};
 }
 
 function dd2RenderDiarios(res){
   const el=document.getElementById('dd2-diarios-content');
-  if(!res){el.innerHTML='<p style="color:#ef4444">⚠️ Não foi possível consultar o Querido Diário automaticamente no momento.</p>';return;}
+  if(!res){el.innerHTML='<p style="color:#ef4444">⚠️ Não foi possível consultar os diários oficiais automaticamente no momento.</p>';return;}
   const {items,algumaFalhou}=res;
-  const aviso=algumaFalhou?'<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma das buscas no Querido Diário falhou — resultado pode estar incompleto.</p>':'';
-  if(!items.length){el.innerHTML=aviso+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma menção encontrada em diários oficiais municipais.</p>';return;}
-  el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>Querido Diário</strong> (Open Knowledge Brasil) — texto integral de diários oficiais de mais de 350 municípios. Clique num resultado pra ver todos os trechos onde o termo foi encontrado.</p>
-  ${items.slice(0,20).map((g,i)=>{
-    const excertos=(g.excerpts||[]).filter(Boolean);
-    const trecho=excertos[0]||'';
+  const aviso=algumaFalhou?'<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais buscas em diários oficiais falharam — resultado pode estar incompleto.</p>':'';
+  if(!items.length){el.innerHTML=aviso+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma menção encontrada em diários oficiais.</p>';return;}
+  el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>DOU — Diário Oficial da União</strong> (atos federais) e no <strong>Querido Diário</strong> (Open Knowledge Brasil — mais de 350 municípios). Clique num resultado pra ver todos os trechos onde o termo foi encontrado.</p>
+  ${items.slice(0,30).map((g,i)=>{
+    const trechos=(g.trechos||[]).filter(Boolean);
+    const trecho=trechos[0]||'';
     const idRow='dd2-diario-det-'+i;
-    const resumoCompleto=excertos.length?excertos.map((tx,j)=>`<div style="${j<excertos.length-1?'margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed #e2e8f0':''}"><b>Trecho ${j+1} de ${excertos.length}:</b><br>${escapeHtml(tx)}</div>`).join(''):'<span style="color:#94a3b8">Nenhum trecho disponível pra exibição.</span>';
+    const resumoCompleto=trechos.length?trechos.map((tx,j)=>`<div style="${j<trechos.length-1?'margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed #e2e8f0':''}">${trechos.length>1?`<b>Trecho ${j+1} de ${trechos.length}:</b><br>`:''}${escapeHtml(tx)}</div>`).join(''):'<span style="color:#94a3b8">Nenhum trecho disponível pra exibição.</span>';
     return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:8px;background:#fff">
       <div style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}','block')">
-        <div style="font-weight:600;font-size:.85rem;margin-bottom:2px"><span id="${idRow}-seta" style="color:#94a3b8;font-size:.72rem">▸</span> ${escapeHtml(g.territory_name)||'—'} — ${escapeHtml(g.state_code)||'—'} <span style="font-weight:400;color:#64748b">· ${escapeHtml(g.date)||'—'}</span>${excertos.length>1?` <span style="font-weight:400;color:#94a3b8;font-size:.72rem">(${excertos.length} trechos)</span>`:''}</div>
+        <div style="font-weight:600;font-size:.85rem;margin-bottom:2px"><span id="${idRow}-seta" style="color:#94a3b8;font-size:.72rem">▸</span> <span class="dd2-badge ${g._fonte==='DOU'?'info':'warn'}">${g._fonte}</span> ${escapeHtml(g.titulo)||'—'}</div>
+        <div style="font-size:.73rem;color:#94a3b8;margin:2px 0">${escapeHtml(g.local)||'—'} · ${escapeHtml(g.data)||'—'}${trechos.length>1?` · ${trechos.length} trechos`:''}</div>
         <div style="font-size:.8rem;color:#64748b;margin:4px 0">${escapeHtml(trecho.substring(0,200))}${trecho.length>200?'…':''}</div>
       </div>
       <div id="${idRow}" style="display:none;background:#f8fafc;border-radius:6px;padding:10px;margin:8px 0 4px;font-size:.8rem;color:#334155;line-height:1.6">${resumoCompleto}</div>
-      <a href="${g.url||'#'}" target="_blank" onclick="event.stopPropagation()" style="font-size:.76rem;color:#0f2d4a">🔗 Ver diário original (PDF)</a>
+      ${g.url?`<a href="${g.url}" target="_blank" onclick="event.stopPropagation()" style="font-size:.76rem;color:#0f2d4a">🔗 Ver publicação original</a>`:''}
     </div>`;
   }).join('')}`;
 }
