@@ -121,9 +121,10 @@ function dd2HTML(){return `
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-cadastral" checked> &#127963; Dados Cadastrais</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-fiscal" checked> &#128188; Situação Fiscal</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-judicial" checked> &#9878; Processos Judiciais</label>
-      <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-sancoes" checked> &#128171; Sanções CEIS/CNEP</label>
+      <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-sancoes" checked> &#128171; Sanções e Restrições</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-pep" checked> &#127963; PEP</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-midia"> &#128240; Mídia Negativa</label>
+      <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-diarios" checked> &#128240; Diários Oficiais Municipais</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-bolsa" checked> &#128176; Bolsa Família (CPF)</label>
     </div>
     <div class="dd2-form-row" style="margin-top:-6px;margin-bottom:16px">
@@ -149,6 +150,7 @@ function dd2HTML(){return `
       <span class="dd2-step" id="dd2-step-sancoes">&#128171; Sanções</span>
       <span class="dd2-step" id="dd2-step-pep">&#127963; PEP</span>
       <span class="dd2-step" id="dd2-step-midia">&#128240; Mídia</span>
+      <span class="dd2-step" id="dd2-step-diarios">&#128240; Diários</span>
       <span class="dd2-step" id="dd2-step-bolsa">&#128176; Bolsa Família</span>
       <span class="dd2-step" id="dd2-step-analise">&#128202; Análise</span>
     </div>
@@ -186,7 +188,7 @@ function dd2HTML(){return `
       <div id="dd2-judicial-content"><div class="dd2-loading">&#9203; Consultando o Diário de Justiça Eletrônico Nacional...</div></div>
     </div>
     <div class="dd2-card" id="dd2-sec-sancoes">
-      <div class="dd2-card-title">&#128171; Sanções CEIS + CNEP</div>
+      <div class="dd2-card-title">&#128171; Sanções e Restrições (CEIS, CNEP, Leniência, CEPIM, CEAF, Internacional)</div>
       <div id="dd2-sancoes-content"><div class="dd2-loading">&#9203; Consultando Portal da Transparência...</div></div>
     </div>
     <div class="dd2-card" id="dd2-sec-pep">
@@ -196,6 +198,10 @@ function dd2HTML(){return `
     <div class="dd2-card" id="dd2-sec-midia" style="display:none">
       <div class="dd2-card-title">&#128240; Mídia Negativa</div>
       <div id="dd2-midia-content"><div class="dd2-loading">&#9203; Buscando notícias negativas...</div></div>
+    </div>
+    <div class="dd2-card" id="dd2-sec-diarios">
+      <div class="dd2-card-title">&#128240; Diários Oficiais Municipais (Querido Diário)</div>
+      <div id="dd2-diarios-content"><div class="dd2-loading">&#9203; Consultando diários oficiais de mais de 350 municípios...</div></div>
     </div>
     <div class="dd2-card" id="dd2-sec-bolsa" style="display:none">
       <div class="dd2-card-title">&#128176; Bolsa Família</div>
@@ -243,11 +249,12 @@ function dd2PortalUrl(rota, params){
 
 let dd2JudicialData = [];
 let dd2CadastralData = null;
-let dd2SancoesData = {ceis:[],cnep:[]};
+let dd2SancoesData = {ceis:[],cnep:[],leniencia:[],cepim:[],ceaf:[],internacional:[]};
 let dd2PepData = [];
 let dd2PepFalhou = false;
 let dd2MidiaData = [];
 let dd2MidiaFalhou = false;
+let dd2DiariosData = [];
 let dd2BolsaData = [];
 
 function dd2FormatDoc(input){
@@ -301,13 +308,14 @@ async function dd2Iniciar(){
   const scSan=document.getElementById('dd2-sc-sancoes').checked;
   const scPep=document.getElementById('dd2-sc-pep').checked;
   const scMid=document.getElementById('dd2-sc-midia').checked;
+  const scDiarios=document.getElementById('dd2-sc-diarios').checked;
   const scBolsa=document.getElementById('dd2-sc-bolsa').checked;
   document.getElementById('dd2-progress').style.display='block';
   document.getElementById('dd2-report').style.display='none';
   document.getElementById('dd2-sec-midia').style.display=scMid?'block':'none';
   document.getElementById('dd2-sec-bolsa').style.display=scBolsa?'block':'none';
   dd2SetProgress(5);
-  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[]};dd2PepData=[];dd2PepFalhou=false;dd2MidiaData=[];dd2MidiaFalhou=false;dd2BolsaData=[];
+  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[],leniencia:[],cepim:[],ceaf:[],internacional:[]};dd2PepData=[];dd2PepFalhou=false;dd2MidiaData=[];dd2MidiaFalhou=false;dd2DiariosData=[];dd2BolsaData=[];
   const tasks=[];
 
   // Failsafe: se alguma chamada travar inesperadamente, libera a tela mesmo assim
@@ -346,26 +354,70 @@ async function dd2Iniciar(){
     document.getElementById('dd2-cadastral-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta cadastral disponível apenas para CNPJ.</p>';
     document.getElementById('dd2-fiscal-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta fiscal disponível apenas para CNPJ.</p>';
   }
+  // djenItemsPromise e diariosPromise ficam disponíveis fora do if pra
+  // alimentar a resolução automática de nome por CPF logo abaixo, mesmo
+  // que os cards já tenham sido renderizados nesse meio-tempo.
+  let djenItemsPromise=Promise.resolve([]);
   if(scJud){
     dd2SetStep('judicial','active');
-    tasks.push(
-      cadastralPromise.then(cad=>{
+    djenItemsPromise=cadastralPromise.then(cad=>{
         const nome=cad?.razao||nomeManual||'';
         const socios=cad?.socios||[];
         return dd2BuscarProcessosDJEN(nome,doc,tipo,socios).then(res=>{
           dd2JudicialData=res.items;
           dd2RenderJudicial(res,nome,doc,tipo,socios);
           dd2SetStep('judicial','done');dd2SetProgress(50);
+          return res.items;
         });
       }).catch(()=>{
         dd2SetStep('judicial','error');
         dd2JudicialData=[];
         document.getElementById('dd2-judicial-content').innerHTML=`<p style="color:#ef4444;margin-bottom:10px">⚠️ Não foi possível consultar o DJEN automaticamente no momento.</p>${dd2LinksManuaisHTML(dd2CadastralData?.razao||nomeManual||'',doc,tipo,dd2CadastralData?.socios||[])}`;
-      })
-    );
+        return [];
+      });
+    tasks.push(djenItemsPromise);
   } else {
     dd2SetStep('judicial','done');
     document.getElementById('dd2-judicial-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta judicial não selecionada.</p>';
+  }
+  let diariosPromise=Promise.resolve([]);
+  if(scDiarios){
+    dd2SetStep('diarios','active');
+    diariosPromise=cadastralPromise.then(cad=>{
+        const nome=cad?.razao||nomeManual||'';
+        return dd2BuscarDiarios(nome,doc,tipo);
+      }).then(res=>{
+        dd2DiariosData=res.items;
+        dd2RenderDiarios(res);
+        dd2SetStep('diarios','done');
+        return res.items;
+      }).catch(()=>{
+        dd2SetStep('diarios','error');
+        dd2DiariosData=[];
+        dd2RenderDiarios(null);
+        return [];
+      });
+    tasks.push(diariosPromise);
+  } else {
+    dd2SetStep('diarios','done');
+    document.getElementById('dd2-diarios-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta de diários oficiais não selecionada.</p>';
+  }
+  // Só faz sentido tentar achar o nome quando é CPF e o usuário não
+  // informou um — pra CNPJ a razão social já vem da Receita Federal, e se
+  // o usuário já digitou o nome não há o que descobrir.
+  let nomeResolvidoPromise=Promise.resolve('');
+  if(tipo==='cpf'&&!nomeManual){
+    nomeResolvidoPromise=Promise.all([djenItemsPromise,diariosPromise]).then(([djenItems,diarioItems])=>{
+      const docFmt=dd2FmtDoc(doc,tipo);
+      const candidato=dd2CandidatoNomePorCPF({djen:djenItems,diarios:diarioItems},docFmt);
+      dd2RenderNomeIdentificado(candidato);
+      if(candidato){
+        const campo=document.getElementById('dd2-nome');
+        if(campo&&!campo.value)campo.value=candidato.nome;
+        return candidato.nome;
+      }
+      return '';
+    }).catch(()=>{dd2RenderNomeIdentificado(null);return '';});
   }
   if(scSan){
     dd2SetStep('sancoes','active');
@@ -374,13 +426,25 @@ async function dd2Iniciar(){
       // o resultado real da outra — mesmo cuidado do Bolsa Família, ver
       // dd2FetchBolsaFamilia. Um HTTP não-OK agora vira rejeição explícita,
       // não um "[]" silencioso que se confunde com "nenhuma sanção".
-      Promise.allSettled([
-        fetch(dd2PortalUrl('ceis','codigoSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}),
-        fetch(dd2PortalUrl('cnep','codigoSancionado='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
-      ]).then(([ceisRes,cnepRes])=>{
-        const ceis=ceisRes.status==='fulfilled'&&Array.isArray(ceisRes.value)?ceisRes.value:[];
-        const cnep=cnepRes.status==='fulfilled'&&Array.isArray(cnepRes.value)?cnepRes.value:[];
-        dd2SancoesData={ceis,cnep,ceisFalhou:ceisRes.status==='rejected',cnepFalhou:cnepRes.status==='rejected'};
+      // Leniência e CEPIM só existem pra pessoa jurídica; CEAF só pra
+      // pessoa física — pedidos pro tipo errado nem saem do ar.
+      Promise.all([cadastralPromise,nomeResolvidoPromise]).then(([cad,nomeResolvido])=>{
+        const nomeParaSancao=cad?.razao||nomeManual||nomeResolvido||'';
+        const chamar=(rota,params)=>fetch(dd2PortalUrl(rota,params+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});
+        return Promise.allSettled([
+          chamar('ceis','codigoSancionado='+doc),
+          chamar('cnep','codigoSancionado='+doc),
+          tipo==='cnpj'?chamar('acordos-leniencia','cnpjSancionado='+doc):Promise.resolve([]),
+          tipo==='cnpj'?chamar('cepim','cnpjSancionado='+doc):Promise.resolve([]),
+          tipo==='cpf'?chamar('ceaf','cpfSancionado='+doc):Promise.resolve([]),
+          nomeParaSancao?dd2FetchSanctionsNetwork(nomeParaSancao):Promise.resolve([]),
+        ]);
+      }).then(([ceisRes,cnepRes,lenRes,cepimRes,ceafRes,intRes])=>{
+        const pega=r=>r.status==='fulfilled'&&Array.isArray(r.value)?r.value:[];
+        dd2SancoesData={
+          ceis:pega(ceisRes),cnep:pega(cnepRes),leniencia:pega(lenRes),cepim:pega(cepimRes),ceaf:pega(ceafRes),internacional:pega(intRes),
+          ceisFalhou:ceisRes.status==='rejected',cnepFalhou:cnepRes.status==='rejected',
+        };
         dd2SetStep('sancoes',(ceisRes.status==='rejected'&&cnepRes.status==='rejected')?'error':'done');dd2SetProgress(65);
         dd2RenderSancoes(dd2SancoesData);
       })
@@ -404,8 +468,8 @@ async function dd2Iniciar(){
   if(scMid){
     dd2SetStep('midia','active');
     tasks.push(
-      cadastralPromise.then(cad=>{
-        const nome=cad?.razao||nomeManual||doc;
+      Promise.all([cadastralPromise,nomeResolvidoPromise]).then(([cad,nomeResolvido])=>{
+        const nome=cad?.razao||nomeManual||nomeResolvido||doc;
         const docFmt=dd2FmtDoc(doc,tipo);
         return dd2BuscarMidiaNegativa(nome,docFmt).then(items=>{
           dd2MidiaData=items;dd2MidiaFalhou=false;dd2SetStep('midia','done');dd2SetProgress(88);
@@ -653,6 +717,130 @@ function dd2LinksManuaisHTML(nome,docNum,tipo,socios){
   `;
 }
 
+// Tenta identificar o nome da pessoa a partir do CPF cruzando trechos onde
+// o documento aparece por extenso (DJEN, Querido Diário). É inferência
+// textual, não confirmação oficial de identidade — nunca tratada como dado
+// cadastral, só como indício pra melhorar as outras buscas.
+function dd2ExtrairNomeProximoAoDoc(texto,docFmt){
+  if(!texto||!docFmt) return null;
+  const docEsc=docFmt.replace(/[.\-\/]/g,'[.\\-\\/]?');
+  const padroes=[
+    new RegExp('([A-ZÀ-Ü][A-ZÀ-Ü\\.\\s]{5,70}?)[,\\s]{1,3}CPF[:\\.\\s]{0,4}(?:n[ºo°]?\\.?)?\\s*'+docEsc,'i'),
+    new RegExp('CPF[:\\.\\s]{0,4}(?:n[ºo°]?\\.?)?\\s*'+docEsc+'[,\\s\\-]{1,4}([A-ZÀ-Ü][A-ZÀ-Ü\\.\\s]{5,70})','i'),
+  ];
+  for(const re of padroes){
+    const m=texto.match(re);
+    if(m&&m[1]){
+      const nome=m[1].trim().replace(/\s+/g,' ');
+      if(nome.length>=6&&nome.length<=70&&/[A-ZÀ-Ü]{2}/.test(nome)) return nome;
+    }
+  }
+  return null;
+}
+
+// Agrega candidatos de nome vindos do DJEN (campo destinatarios, quando a
+// comunicação tem uma única parte — forte indício de que é ela) e de
+// trechos de diários municipais, e fica com o mais recorrente. Sem
+// candidato repetido, o achado é mostrado do mesmo jeito, mas com um único
+// voto — a UI sempre deixa claro que é indício, não confirmação.
+function dd2CandidatoNomePorCPF(fontes,docFmt){
+  const contagem=new Map();
+  const somar=nome=>{
+    if(!nome) return;
+    nome=nome.trim().replace(/\s+/g,' ');
+    if(nome.length<6||nome.length>70) return;
+    contagem.set(nome,(contagem.get(nome)||0)+1);
+  };
+  (fontes.djen||[]).forEach(p=>{
+    const dests=p.destinatarios||[];
+    if(dests.length===1&&dests[0]?.nome) somar(dests[0].nome);
+    somar(dd2ExtrairNomeProximoAoDoc(p.texto||'',docFmt));
+  });
+  (fontes.diarios||[]).forEach(g=>{
+    (g.excerpts||[]).forEach(tx=>somar(dd2ExtrairNomeProximoAoDoc(tx,docFmt)));
+  });
+  if(!contagem.size) return null;
+  const [nome,vezes]=[...contagem.entries()].sort((a,b)=>b[1]-a[1])[0];
+  const total=[...contagem.values()].reduce((a,b)=>a+b,0);
+  return {nome,vezes,total};
+}
+
+function dd2RenderNomeIdentificado(candidato){
+  const el=document.getElementById('dd2-cadastral-content');
+  if(!el) return;
+  if(!candidato){
+    el.innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta cadastral disponível apenas para CNPJ. Nenhum nome foi identificado automaticamente a partir do CPF nas fontes consultadas (DJEN, Querido Diário) — informe o nome manualmente no campo acima para melhorar as demais buscas.</p>';
+    return;
+  }
+  el.innerHTML=`<p style="color:#b45309;font-size:.85rem;margin-bottom:4px"><strong>&#128100; Nome identificado automaticamente:</strong> ${escapeHtml(candidato.nome)}</p>
+  <p style="font-size:.78rem;color:#64748b">Encontrado em ${candidato.vezes} de ${candidato.total} menção(ões) ao CPF nas fontes consultadas — é um indício textual, <b>não é confirmação oficial de identidade</b>. Confira manualmente antes de usar.</p>`;
+}
+
+const DD2_QUERIDODIARIO_URL='https://api.queridodiario.ok.org.br/gazettes';
+
+// Busca texto integral em diários oficiais de mais de 350 municípios
+// (Querido Diário, Open Knowledge Brasil). API pública, sem chave, CORS
+// liberado — diferente do DJEN (judicial) e do DOU (federal), essa cobre
+// atos municipais: licitação, nomeação, sanção administrativa local etc.
+async function dd2FetchQueridoDiario(querystring){
+  if(!querystring) return [];
+  const qs=new URLSearchParams({querystring,size:'15'}).toString();
+  const r=await fetch(`${DD2_QUERIDODIARIO_URL}?${qs}`,{headers:{'Accept':'application/json'},signal:AbortSignal.timeout(15000)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const d=await r.json();
+  return Array.isArray(d?.gazettes)?d.gazettes:[];
+}
+
+async function dd2BuscarDiarios(nome,docNum,tipo){
+  const docFmt=dd2FmtDoc(docNum,tipo);
+  const buscas=[dd2FetchQueridoDiario(docFmt)];
+  if(nome) buscas.push(dd2FetchQueridoDiario(nome));
+  const resultados=await Promise.allSettled(buscas);
+  let algumaFalhou=false;
+  const porChave=new Map();
+  resultados.forEach(res=>{
+    if(res.status==='fulfilled'){
+      res.value.forEach(g=>{
+        const chave=(g.territory_id||'')+'|'+(g.date||'')+'|'+(g.url||'');
+        if(!porChave.has(chave)) porChave.set(chave,g);
+      });
+    } else algumaFalhou=true;
+  });
+  if(algumaFalhou&&resultados.every(r=>r.status==='rejected')) throw new Error('Todas as buscas no Querido Diário falharam');
+  const items=[...porChave.values()].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  return {items,algumaFalhou};
+}
+
+function dd2RenderDiarios(res){
+  const el=document.getElementById('dd2-diarios-content');
+  if(!res){el.innerHTML='<p style="color:#ef4444">⚠️ Não foi possível consultar o Querido Diário automaticamente no momento.</p>';return;}
+  const {items,algumaFalhou}=res;
+  const aviso=algumaFalhou?'<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma das buscas no Querido Diário falhou — resultado pode estar incompleto.</p>':'';
+  if(!items.length){el.innerHTML=aviso+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma menção encontrada em diários oficiais municipais.</p>';return;}
+  el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>Querido Diário</strong> (Open Knowledge Brasil) — texto integral de diários oficiais de mais de 350 municípios.</p>
+  ${items.slice(0,20).map(g=>{
+    const trecho=(g.excerpts||[])[0]||'';
+    return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:8px;background:#fff">
+      <div style="font-weight:600;font-size:.85rem;margin-bottom:2px">${escapeHtml(g.territory_name)||'—'} — ${escapeHtml(g.state_code)||'—'} <span style="font-weight:400;color:#64748b">· ${escapeHtml(g.date)||'—'}</span></div>
+      <div style="font-size:.8rem;color:#64748b;margin:4px 0">${escapeHtml(trecho.substring(0,280))}${trecho.length>280?'…':''}</div>
+      <a href="${g.url||'#'}" target="_blank" style="font-size:.76rem;color:#0f2d4a">🔗 Ver diário original (PDF)</a>
+    </div>`;
+  }).join('')}`;
+}
+
+const DD2_SANCTIONS_URL='https://api.sanctions.network/rpc/search_sanctions';
+
+// Agrega OFAC (Tesouro dos EUA) + ONU + UE numa busca só, por nome. API de
+// terceiro (open source, não-oficial) — usada como sinal complementar de
+// PLD/FT, sempre com ressalva na tela pra conferir na fonte oficial.
+async function dd2FetchSanctionsNetwork(nome){
+  if(!nome) return [];
+  const r=await fetch(`${DD2_SANCTIONS_URL}?name=${encodeURIComponent(nome)}`,{headers:{'Accept':'application/json'},signal:AbortSignal.timeout(12000)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const d=await r.json();
+  return Array.isArray(d)?d:[];
+}
+
 const DD2_POLO_LABEL={A:'Ativo',P:'Passivo',T:'Terceiro',D:'Outro'};
 
 function dd2RenderJudicial(res,nome,docNum,tipo,socios){
@@ -677,19 +865,55 @@ function dd2RenderJudicial(res,nome,docNum,tipo,socios){
   `;
 }
 
+// CEIS/CNEP, Leniência, CEPIM, CEAF e o agregador internacional têm formatos
+// de resposta bem diferentes entre si — essa função normaliza cada um pras
+// mesmas colunas da tabela.
+function dd2NormalizarSancao(item,base){
+  if(base==='CEIS'||base==='CNEP'){
+    return{descricao:item.tipoSancao?.descricaoPortal||item.tipoSancao?.descricaoResumida||'—',orgao:item.orgaoSancionador?.nome||'—',inicio:item.dataInicioSancao,fim:item.dataFimSancao};
+  }
+  if(base==='Leniência'){
+    const empresas=(item.sancoes||[]).map(s=>s.razaoSocial||s.nomeInformadoOrgaoResponsavel).filter(Boolean).join(', ');
+    return{descricao:'Acordo de Leniência'+(item.situacaoAcordo?' — '+item.situacaoAcordo:'')+(empresas?' ('+empresas+')':''),orgao:item.orgaoResponsavel||'—',inicio:item.dataInicioAcordo,fim:item.dataFimAcordo};
+  }
+  if(base==='CEPIM'){
+    return{descricao:'Entidade impedida de celebrar convênio'+(item.motivo?' — '+item.motivo:''),orgao:item.orgaoSuperior?.nome||'—',inicio:item.dataReferencia,fim:null};
+  }
+  if(base==='CEAF'){
+    return{descricao:(item.tipoPunicao?.descricao||'Punição disciplinar')+(item.cargoEfetivo?' — '+item.cargoEfetivo:''),orgao:item.orgaoLotacao?.nome||'—',inicio:item.dataPublicacao,fim:null};
+  }
+  // Internacional (sanctions.network — OFAC/ONU/UE)
+  return{descricao:'Sanção internacional'+(item.source?' — '+String(item.source).toUpperCase():'')+((item.positions||[]).length?' — '+item.positions.join(', '):''),orgao:(item.names||[]).join(', ')||'—',inicio:item.listed_on,fim:null};
+}
+
+function dd2SanTotal(d){
+  return (d?.ceis||[]).length+(d?.cnep||[]).length+(d?.leniencia||[]).length+(d?.cepim||[]).length+(d?.ceaf||[]).length+(d?.internacional||[]).length;
+}
+
 function dd2RenderSancoes(d){
   const el=document.getElementById('dd2-sancoes-content');
-  const ceis=d?.ceis||[];
-  const cnep=d?.cnep||[];
   const falhouTudo=!!(d?.ceisFalhou&&d?.cnepFalhou);
   if(falhouTudo){el.innerHTML='<p style="color:#ef4444;font-weight:600">⚠️ Não foi possível consultar as bases CEIS e CNEP automaticamente no momento.</p>';return;}
   let avisos='';
-  if(d?.ceisFalhou) avisos='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CEIS — resultado pode estar incompleto.</p>';
-  else if(d?.cnepFalhou) avisos='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CNEP — resultado pode estar incompleto.</p>';
-  const all=[...ceis.map(s=>({...s,_base:'CEIS'})),...cnep.map(s=>({...s,_base:'CNEP'}))];
-  if(!all.length){el.innerHTML=avisos+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma sanção encontrada nas bases CEIS/CNEP.</p>';return;}
-  el.innerHTML=avisos+`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Base</th><th>Tipo de Sanção</th><th>Órgão Sancionador</th><th>Vigência</th><th>Status</th></tr></thead>
-  <tbody>${all.map(s=>`<tr><td><span class="dd2-badge danger">${s._base}</span></td><td>${escapeHtml(s.tipoSancao?.descricaoPortal||s.tipoSancao?.descricaoResumida)||'—'}</td><td>${escapeHtml(s.orgaoSancionador?.nome)||'—'}</td><td>${escapeHtml(s.dataInicioSancao)||'—'} – ${escapeHtml(s.dataFimSancao)||'vigente'}</td><td><span class="dd2-badge ${s.dataFimSancao?'warn':'danger'}">${s.dataFimSancao?'Encerrada':'Vigente'}</span></td></tr>`).join('')}</tbody></table></div>`;
+  if(d?.ceisFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CEIS — resultado pode estar incompleto.</p>';
+  else if(d?.cnepFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CNEP — resultado pode estar incompleto.</p>';
+  const all=[
+    ...(d?.ceis||[]).map(s=>({...dd2NormalizarSancao(s,'CEIS'),_base:'CEIS'})),
+    ...(d?.cnep||[]).map(s=>({...dd2NormalizarSancao(s,'CNEP'),_base:'CNEP'})),
+    ...(d?.leniencia||[]).map(s=>({...dd2NormalizarSancao(s,'Leniência'),_base:'Leniência'})),
+    ...(d?.cepim||[]).map(s=>({...dd2NormalizarSancao(s,'CEPIM'),_base:'CEPIM'})),
+    ...(d?.ceaf||[]).map(s=>({...dd2NormalizarSancao(s,'CEAF'),_base:'CEAF'})),
+    ...(d?.internacional||[]).map(s=>({...dd2NormalizarSancao(s,'Internacional'),_base:'Internacional'})),
+  ];
+  if(!all.length){el.innerHTML=avisos+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma sanção ou restrição encontrada nas bases consultadas.</p>';return;}
+  const temIntl=all.some(s=>s._base==='Internacional');
+  el.innerHTML=avisos+`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Base</th><th>Descrição</th><th>Órgão</th><th>Período</th><th>Status</th></tr></thead>
+  <tbody>${all.map(s=>{
+    const semVigencia=s._base==='CEPIM'||s._base==='CEAF'||s._base==='Internacional';
+    const statusTxt=s.fim?'Encerrada':(semVigencia?'Registrado':'Vigente');
+    return `<tr><td><span class="dd2-badge danger">${s._base}</span></td><td>${escapeHtml(s.descricao)}</td><td>${escapeHtml(s.orgao)}</td><td>${escapeHtml(s.inicio)||'—'}${s.fim!=null?' – '+escapeHtml(s.fim):''}</td><td><span class="dd2-badge ${!s.fim&&!semVigencia?'danger':'warn'}">${statusTxt}</span></td></tr>`;
+  }).join('')}</tbody></table></div>
+  ${temIntl?`<p style="font-size:.72rem;color:#94a3b8;margin-top:10px">⚠️ Resultados "Internacional" vêm de um agregador de terceiros (sanctions.network) não-oficial — use como indício, confirme na fonte primária (OFAC/ONU/UE) antes de qualquer decisão.</p>`:''}`;
 }
 
 function dd2RenderPep(data,falhou){
@@ -842,7 +1066,7 @@ function dd2RenderScore(){
   // não "0 = limpo". Sem essa distinção, uma consulta que falhar em
   // silêncio (ex.: 401 do token) zera o score mesmo sem checar nada.
   const sancoesFalhouTudo=!!(dd2SancoesData?.ceisFalhou&&dd2SancoesData?.cnepFalhou);
-  const sanTotal=(dd2SancoesData?.ceis||[]).length+(dd2SancoesData?.cnep||[]).length;
+  const sanTotal=dd2SanTotal(dd2SancoesData);
   if(sanTotal>0)score=Math.min(100,score+40);
 
   if(!dd2PepFalhou&&dd2PepData.length>0)score=Math.min(100,score+20);
@@ -904,15 +1128,16 @@ function dd2RenderChecklist(){
   const el=document.getElementById('dd2-checklist-content');
   const d=dd2CadastralData;
   const sit=d?.situacao||'';
-  const sanTotal=(dd2SancoesData?.ceis||[]).length+(dd2SancoesData?.cnep||[]).length;
+  const sanTotal=dd2SanTotal(dd2SancoesData);
   const sancoesFalhouTudo=!!(dd2SancoesData?.ceisFalhou&&dd2SancoesData?.cnepFalhou);
   const items=[
     {state:d?'ok':'bad',label:'Dados cadastrais obtidos',icon:'&#127963;'},
     {state:(!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'))?'ok':'bad',label:'Situação cadastral regular',icon:'&#128188;'},
     {state:dd2JudicialData.length===0?'ok':'bad',label:dd2JudicialData.length?`${dd2JudicialData.length} comunicação(ões) processual(is) encontrada(s) no DJEN`:'Sem comunicações processuais no DJEN',icon:'&#9878;'},
-    {state:sancoesFalhouTudo?'warn':(sanTotal===0?'ok':'bad'),label:sancoesFalhouTudo?'Não foi possível verificar sanções CEIS/CNEP':'Sem sanções CEIS/CNEP',icon:'&#128171;'},
+    {state:sancoesFalhouTudo?'warn':(sanTotal===0?'ok':'bad'),label:sancoesFalhouTudo?'Não foi possível verificar sanções/restrições':(sanTotal?`${sanTotal} sanção(ões)/restrição(ões) encontrada(s)`:'Sem sanções ou restrições'),icon:'&#128171;'},
     {state:dd2PepFalhou?'warn':(dd2PepData.length===0?'ok':'bad'),label:dd2PepFalhou?'Não foi possível verificar PEP':'Sem registro PEP',icon:'&#127963;'},
-    {state:dd2MidiaFalhou?'warn':(dd2MidiaData.length===0?'ok':'bad'),label:dd2MidiaFalhou?'Não foi possível verificar mídia negativa automaticamente':'Sem notícias negativas',icon:'&#128240;'}
+    {state:dd2MidiaFalhou?'warn':(dd2MidiaData.length===0?'ok':'bad'),label:dd2MidiaFalhou?'Não foi possível verificar mídia negativa automaticamente':'Sem notícias negativas',icon:'&#128240;'},
+    {state:dd2DiariosData.length===0?'ok':'bad',label:dd2DiariosData.length?`${dd2DiariosData.length} menção(ões) em diários oficiais municipais`:'Sem menções em diários oficiais municipais',icon:'&#128240;'}
   ];
   if(document.getElementById('dd2-tipo').value==='cpf'){
     items.push({state:dd2BolsaData.length===0?'ok':'bad',label:dd2BolsaData.length?`Recebe Bolsa Família (${dd2BolsaData.length} parcela(s))`:'Não recebe Bolsa Família',icon:'&#128176;'});
