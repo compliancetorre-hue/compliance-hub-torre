@@ -114,7 +114,14 @@ async function loadFromSupabase() {
         _edgeGet('controles?order=id'),
         _edgeGet('planos?order=id'),
         _edgeGet('denuncias?order=id'),
-        _edgeGet('fbboards?id=eq.main'),
+        // A Edge Function faz .eq(chave,valor) puro por parâmetro — não
+        // entende a sintaxe "campo=eq.valor" do PostgREST. Usar "id=eq.main"
+        // aqui procurava literalmente por um id igual à string "eq.main",
+        // que nunca existe (o registro salvo por sbSaveFbBoards tem
+        // id:"main"), então o Flow Board nunca carregava do Supabase em
+        // outro navegador — só parecia salvar porque o cache local
+        // (localStorage) escondia o problema no mesmo navegador.
+        _edgeGet('fbboards?id=main'),
         _edgeGet('agenda?order=data'),
         _edgeGet('rm_planos?order=id'),
         _edgeGet('settings?select=*')
