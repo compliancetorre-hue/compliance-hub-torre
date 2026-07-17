@@ -503,14 +503,15 @@ async function dd2Iniciar(){
     tasks.push(
       Promise.all([cadastralPromise,nomeResolvidoPromise]).then(([cad,nomeResolvido])=>{
         const nome=cad?.razao||nomeManual||nomeResolvido||doc;
+        const fantasia=cad?.fantasia||'';
         const docFmt=dd2FmtDoc(doc,tipo);
-        return dd2BuscarMidiaNegativa(nome,docFmt).then(items=>{
+        return dd2BuscarMidiaNegativa(nome,docFmt,fantasia).then(items=>{
           dd2MidiaData=items;dd2MidiaFalhou=false;dd2SetStep('midia','done');dd2SetProgress(88);
-          dd2RenderMidia(items,nome,docFmt,false);
+          dd2RenderMidia(items,nome,docFmt,false,fantasia);
         }).catch(()=>{
           dd2SetStep('midia','error');
           dd2MidiaData=[];dd2MidiaFalhou=true;
-          dd2RenderMidia([],nome,docFmt,true);
+          dd2RenderMidia([],nome,docFmt,true,fantasia);
         });
       })
     );
@@ -1309,13 +1310,17 @@ async function dd2FetchGoogleNewsRSS(query){
 // booleanas usadas no Due Diligence 1 — ver buildBooleanQuery em
 // due-diligence.js) e mescla os resultados deduplicados por link, pra
 // cobrir criminal/financeiro/regulatório/reputacional numa só varredura.
-async function dd2BuscarMidiaNegativa(nome,docFmt){
+async function dd2BuscarMidiaNegativa(nome,docFmt,fantasia){
   // Sem o documento na query: nenhuma notícia escreve o CPF/CNPJ formatado
   // junto do nome, então exigi-lo com AND zera a busca quase sempre (testado
   // ao vivo: com CNPJ 1 resultado, sem CNPJ 10, pra mesma empresa e mesmos
   // termos). O documento continua nos links manuais, onde o Google Search
-  // completo (não só Notícias) lida melhor com o termo exato.
-  const bool=(typeof buildBooleanQuery==='function')?buildBooleanQuery(nome,null):null;
+  // completo (não só Notícias) lida melhor com o termo exato. O nome
+  // fantasia entra via OR (ver buildBooleanQuery) porque a imprensa quase
+  // nunca cita a razão social completa — só ela sozinha também zerava a
+  // busca (confirmado ao vivo com caso real: 0 resultados com a razão
+  // social, dezenas com o nome fantasia).
+  const bool=(typeof buildBooleanQuery==='function')?buildBooleanQuery(nome,null,fantasia):null;
   const queries=bool?[bool.criminal,bool.financeiro,bool.regulatorio,bool.reputacional]:[`"${nome}" corrupção OR fraude OR escândalo OR investigação`.trim()];
   const resultados=await Promise.allSettled(queries.map(q=>dd2FetchGoogleNewsRSS(q)));
   const porLink=new Map();
@@ -1332,16 +1337,17 @@ async function dd2BuscarMidiaNegativa(nome,docFmt){
 
 // Links de verificação manual, como reforço à busca automática (mesmo
 // padrão do dd2LinksManuaisHTML usado na seção Judicial).
-function dd2LinksManuaisMidiaHTML(nome,docFmt){
-  const bool=(typeof buildBooleanQuery==='function')?buildBooleanQuery(nome,docFmt):null;
+function dd2LinksManuaisMidiaHTML(nome,docFmt,fantasia){
+  const bool=(typeof buildBooleanQuery==='function')?buildBooleanQuery(nome,docFmt,fantasia):null;
   const alvo=nome||docFmt||'';
   const alvoSafe=escapeHtml(alvo);
+  const alvoBusca=fantasia&&fantasia.trim().toLowerCase()!==alvo.trim().toLowerCase()?fantasia:alvo;
   const qCriminal=bool?bool.criminal:`"${alvo}" corrupção OR fraude OR escândalo`;
   const links=[
     {label:`Google — mídias negativas de "${alvoSafe}" (busca booleana)`,url:`https://www.google.com/search?q=${encodeURIComponent(qCriminal)}`},
-    {label:`Google Notícias — "${alvoSafe}"`,url:`https://news.google.com/search?q=${encodeURIComponent('"'+alvo+'"')}&hl=pt-BR&gl=BR&ceid=BR:pt-419`},
-    {label:`JusBrasil Notícias — "${alvoSafe}"`,url:`https://www.jusbrasil.com.br/busca?q=${encodeURIComponent(alvo)}`},
-    {label:`Reclame Aqui — "${alvoSafe}"`,url:`https://www.reclameaqui.com.br/busca/?q=${encodeURIComponent(alvo)}`},
+    {label:`Google Notícias — "${escapeHtml(alvoBusca)}"`,url:`https://news.google.com/search?q=${encodeURIComponent('"'+alvoBusca+'"')}&hl=pt-BR&gl=BR&ceid=BR:pt-419`},
+    {label:`JusBrasil Notícias — "${escapeHtml(alvoBusca)}"`,url:`https://www.jusbrasil.com.br/busca?q=${encodeURIComponent(alvoBusca)}`},
+    {label:`Reclame Aqui — "${escapeHtml(alvoBusca)}"`,url:`https://www.reclameaqui.com.br/busca/?q=${encodeURIComponent(alvoBusca)}`},
   ];
   return`
     <div style="font-size:.72rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Reforçar verificação manualmente</div>
@@ -1349,20 +1355,20 @@ function dd2LinksManuaisMidiaHTML(nome,docFmt){
   `;
 }
 
-function dd2RenderMidia(data,nome,docFmt,falhou){
+function dd2RenderMidia(data,nome,docFmt,falhou,fantasia){
   const el=document.getElementById('dd2-midia-content');
   if(falhou){
-    el.innerHTML=`<p style="color:#ef4444;margin-bottom:10px">⚠️ Não foi possível consultar mídia negativa automaticamente no momento (provedores de busca indisponíveis ou bloqueados) — confira manualmente.</p>${dd2LinksManuaisMidiaHTML(nome,docFmt)}`;
+    el.innerHTML=`<p style="color:#ef4444;margin-bottom:10px">⚠️ Não foi possível consultar mídia negativa automaticamente no momento (provedores de busca indisponíveis ou bloqueados) — confira manualmente.</p>${dd2LinksManuaisMidiaHTML(nome,docFmt,fantasia)}`;
     return;
   }
   if(!data.length){
-    el.innerHTML=`<p style="color:#22c55e;font-weight:600;margin-bottom:10px">✅ Nenhuma notícia negativa encontrada nas buscas automáticas.</p>${dd2LinksManuaisMidiaHTML(nome,docFmt)}`;
+    el.innerHTML=`<p style="color:#22c55e;font-weight:600;margin-bottom:10px">✅ Nenhuma notícia negativa encontrada nas buscas automáticas.</p>${dd2LinksManuaisMidiaHTML(nome,docFmt,fantasia)}`;
     return;
   }
   el.innerHTML=data.slice(0,20).map(n=>`<div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:8px;background:#fff">
     <div style="font-weight:600;font-size:.88rem;margin-bottom:4px"><a href="${n.link||'#'}" target="_blank" style="color:#0f2d4a;text-decoration:none">${escapeHtml(n.title)||'Sem título'}</a></div>
     <div style="font-size:.78rem;color:#64748b">${n.pubDate?new Date(n.pubDate).toLocaleDateString('pt-BR'):''} — ${escapeHtml(n.source?.name)||''}</div>
-  </div>`).join('')+`<div style="margin-top:10px">${dd2LinksManuaisMidiaHTML(nome,docFmt)}</div>`;
+  </div>`).join('')+`<div style="margin-top:10px">${dd2LinksManuaisMidiaHTML(nome,docFmt,fantasia)}</div>`;
 }
 
 function dd2RenderScore(){
