@@ -1,4 +1,4 @@
-﻿// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
 // DUE DILIGENCE 2 — KYC & MÍDIAS NEGATIVAS
 // ═══════════════════════════════════════════════════════
 
@@ -932,9 +932,60 @@ function dd2LimparTrecho(txt){
   return limpo;
 }
 
-// DOU e Querido Diário devolvem formatos totalmente diferentes (datas em
-// formatos opostos, HTML de destaque embutido no texto etc.) — normaliza
-// os dois pro mesmo formato de exibição.
+const DD2_DOERJ_URL='https://www.ioerj.com.br/portal/modules/conteudoonline/busca_do.php?acao=busca';
+
+// Busca no Diário Oficial do Estado do Rio de Janeiro (DOERJ) — cobre atos
+// do Poder Executivo/Legislativo/Judiciário estadual e, na "Parte IV", os
+// municípios do RJ que publicam matérias ali em vez de diário próprio.
+// Sistema legado (XOOPS), sem API JSON — só funciona via POST com corpo
+// application/x-www-form-urlencoded (testado: GET com os mesmos parâmetros
+// não retorna nada) e não libera CORS pro navegador, por isso passa pela
+// rota /proxy da Edge Function. A busca entre aspas retorna frase exata,
+// igual ao DOU — sem aspas o sistema devolve termos soltos, gerando ruído.
+async function dd2FetchDOERJ(querystring){
+  if(!querystring) return [];
+  const corpo=new URLSearchParams({
+    textobusca:'"'+querystring+'"',
+    'busca[jornal]':'',
+    'datapublicacao[dia]':'','datapublicacao[mes]':'','datapublicacao[ano]':'',
+    tipobusca:'texto',
+    buscaordem:'datapublicacao desc',
+  }).toString();
+  const r=await fetch(dd2ProxyUrl(DD2_DOERJ_URL),{
+    method:'POST',
+    headers:{...dd2PortalHeaders(),'Content-Type':'application/x-www-form-urlencoded'},
+    body:corpo,
+    signal:AbortSignal.timeout(20000),
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const html=await r.text();
+  return dd2ParseDOERJ(html);
+}
+
+// Extrai cada resultado do HTML de resposta (sistema legado, sem JSON) —
+// cada matéria aparece como um bloco de 3 linhas de tabela: link + data/
+// página/ID, Jornal/Tipo, e o trecho com o termo buscado destacado em <em>.
+function dd2ParseDOERJ(html){
+  const itens=[];
+  const re=/href="(\/portal\/modules\/conteudoonline\/view_publicacao\.php\?[^"]+)"[\s\S]*?<span class="style2">([^<]+)<\/span>[\s\S]*?<b>Jornal:<\/b>\s*([^<]+)<\/span>[\s\S]*?<b>Tipo:<\/b>\s*([^<]+)<\/span>[\s\S]*?<span>\s*([\s\S]*?)<\/span>\s*<\/td>\s*<\/tr>/g;
+  let m;
+  while((m=re.exec(html))){
+    const dataMatch=m[2].match(/(\d{2}\/\d{2}\/\d{4})/);
+    itens.push({
+      link:'https://www.ioerj.com.br'+m[1].replace(/&amp;/g,'&'),
+      cabecalho:m[2].replace(/\s+/g,' ').trim(),
+      data:dataMatch?dataMatch[1]:'',
+      jornal:m[3].replace(/\s+/g,' ').trim(),
+      tipo:m[4].replace(/\s+/g,' ').trim(),
+      trecho:m[5].replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim(),
+    });
+  }
+  return itens;
+}
+
+// DOU, Querido Diário e DOERJ devolvem formatos totalmente diferentes
+// (datas em formatos opostos, HTML de destaque embutido no texto etc.) —
+// normaliza os três pro mesmo formato de exibição.
 function dd2NormalizarDiario(item,fonte){
   if(fonte==='DOU'){
     const trecho=dd2LimparTrecho((item.content||'').replace(/<[^>]+>/g,''));
@@ -944,6 +995,15 @@ function dd2NormalizarDiario(item,fonte){
       data:item.pubDate||'—',
       trechos:[trecho].filter(Boolean),
       url:item.urlTitle?`https://www.in.gov.br/web/dou/-/${item.urlTitle}`:'',
+    };
+  }
+  if(fonte==='DOERJ'){
+    return {
+      titulo:item.cabecalho||'Diário Oficial do Estado do RJ',
+      local:`${item.jornal||'—'} · ${item.tipo||'—'}`,
+      data:item.data||'—',
+      trechos:[dd2LimparTrecho(item.trecho)].filter(Boolean),
+      url:item.link||'',
     };
   }
   return {
@@ -974,9 +1034,13 @@ async function dd2BuscarDiarios(nome,docNum,tipo){
   // já que licitação/contrato publica o CNPJ completo com frequência.
   const buscasQD=tipo==='cnpj'?[dd2FetchQueridoDiario(docFmt)]:[];
   const buscasDOU=tipo==='cnpj'?[dd2FetchDOU(docFmt)]:[];
-  if(nome){ buscasQD.push(dd2FetchQueridoDiario(nome)); buscasDOU.push(dd2FetchDOU(nome)); }
+  // DOERJ (estadual + municípios do RJ) roda sempre que houver documento ou
+  // nome pra buscar — complementa o DOU (federal) e o Querido Diário
+  // (municípios cobertos nacionalmente, mas sem o Diário estadual do RJ).
+  const buscasDOERJ=tipo==='cnpj'?[dd2FetchDOERJ(docFmt)]:[];
+  if(nome){ buscasQD.push(dd2FetchQueridoDiario(nome)); buscasDOU.push(dd2FetchDOU(nome)); buscasDOERJ.push(dd2FetchDOERJ(nome)); }
 
-  const [resQD,resDOU]=await Promise.all([Promise.allSettled(buscasQD),Promise.allSettled(buscasDOU)]);
+  const [resQD,resDOU,resDOERJ]=await Promise.all([Promise.allSettled(buscasQD),Promise.allSettled(buscasDOU),Promise.allSettled(buscasDOERJ)]);
   let algumaFalhou=false;
   const porChave=new Map();
   resQD.forEach(res=>{
@@ -995,8 +1059,16 @@ async function dd2BuscarDiarios(nome,docNum,tipo){
       });
     } else algumaFalhou=true;
   });
+  resDOERJ.forEach(res=>{
+    if(res.status==='fulfilled'){
+      res.value.forEach(g=>{
+        const chave='doerj|'+(g.link||'');
+        if(!porChave.has(chave)) porChave.set(chave,{...dd2NormalizarDiario(g,'DOERJ'),_fonte:'DOERJ'});
+      });
+    } else algumaFalhou=true;
+  });
 
-  const resultadosTodos=[...resQD,...resDOU];
+  const resultadosTodos=[...resQD,...resDOU,...resDOERJ];
   if(algumaFalhou&&resultadosTodos.every(r=>r.status==='rejected')) throw new Error('Todas as buscas em diários oficiais falharam');
   const items=[...porChave.values()].sort((a,b)=>dd2DataDiarioOrdenavel(b.data).localeCompare(dd2DataDiarioOrdenavel(a.data)));
   return {items,algumaFalhou};
@@ -1014,15 +1086,16 @@ function dd2RenderDiarios(res,semNome){
   // verde de "sem menção encontrada".
   if(semNome){el.innerHTML=aviso+'<p style="color:#b45309;font-weight:600">⚠️ Nenhum nome disponível pra buscar — informe o nome completo da pessoa no campo acima pra pesquisar nos diários oficiais.</p>';return;}
   if(!items.length){el.innerHTML=aviso+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma menção encontrada em diários oficiais.</p>';return;}
-  el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>DOU — Diário Oficial da União</strong> (atos federais) e no <strong>Querido Diário</strong> (Open Knowledge Brasil — mais de 350 municípios). Clique num resultado pra ver todos os trechos onde o termo foi encontrado.</p>
+  el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>DOU — Diário Oficial da União</strong> (atos federais), no <strong>DOERJ — Diário Oficial do Estado do RJ</strong> (atos estaduais e municípios do RJ) e no <strong>Querido Diário</strong> (Open Knowledge Brasil — mais de 350 municípios). Clique num resultado pra ver todos os trechos onde o termo foi encontrado.</p>
   ${items.slice(0,30).map((g,i)=>{
     const trechos=(g.trechos||[]).filter(Boolean);
     const trecho=trechos[0]||'';
     const idRow='dd2-diario-det-'+i;
     const resumoCompleto=trechos.length?trechos.map((tx,j)=>`<div style="${j<trechos.length-1?'margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed #e2e8f0':''}">${trechos.length>1?`<b>Trecho ${j+1} de ${trechos.length}:</b><br>`:''}${escapeHtml(tx)}</div>`).join(''):'<span style="color:#94a3b8">Nenhum trecho disponível pra exibição.</span>';
+    const badgeCls=g._fonte==='DOU'?'info':g._fonte==='DOERJ'?'danger':'warn';
     return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:8px;background:#fff">
       <div style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}','block')">
-        <div style="font-weight:600;font-size:.85rem;margin-bottom:2px"><span id="${idRow}-seta" style="color:#94a3b8;font-size:.72rem">▸</span> <span class="dd2-badge ${g._fonte==='DOU'?'info':'warn'}">${g._fonte}</span> ${escapeHtml(g.titulo)||'—'}</div>
+        <div style="font-weight:600;font-size:.85rem;margin-bottom:2px"><span id="${idRow}-seta" style="color:#94a3b8;font-size:.72rem">▸</span> <span class="dd2-badge ${badgeCls}">${g._fonte}</span> ${escapeHtml(g.titulo)||'—'}</div>
         <div style="font-size:.73rem;color:#94a3b8;margin:2px 0">${escapeHtml(g.local)||'—'} · ${escapeHtml(g.data)||'—'}${trechos.length>1?` · ${trechos.length} trechos`:''}</div>
         <div style="font-size:.8rem;color:#64748b;margin:4px 0">${escapeHtml(trecho.substring(0,200))}${trecho.length>200?'…':''}</div>
       </div>
@@ -1256,13 +1329,14 @@ function dd2RenderBolsaFamilia(res){
 // devolve título/link/data/veículo reais (diferente da antiga API de
 // "respostas instantâneas" do DuckDuckGo, que não é motor de busca e quase
 // sempre voltava vazia — ver nota equivalente em due-diligence.js).
-// O feed não tem CORS liberado pro navegador, então passa por um proxy;
-// dois proxies são tentados em sequência caso o primeiro esteja fora do ar
-// ou tenha sido bloqueado pelo Google (páginas de "tráfego incomum").
-const DD2_CORS_PROXIES=[
-  u=>'https://corsproxy.io/?url='+encodeURIComponent(u),
-  u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),
-];
+// O feed não tem CORS liberado pro navegador. Chegamos a usar proxies CORS
+// públicos (corsproxy.io, allorigins.win) — mas corsproxy.io passou a
+// bloquear qualquer origem que não seja localhost no plano grátis, e os
+// outros testados são lentos/instáveis. A rota /proxy da própria Edge
+// Function (chamada servidor-a-servidor, sem CORS) é o caminho confiável.
+function dd2ProxyUrl(alvo){
+  return `${EDGE_URL}/proxy?url=${encodeURIComponent(alvo)}`;
+}
 
 function dd2ParseGoogleNewsRSS(xmlText){
   const doc=new DOMParser().parseFromString(xmlText,'text/xml');
@@ -1277,19 +1351,13 @@ function dd2ParseGoogleNewsRSS(xmlText){
 
 async function dd2FetchGoogleNewsRSS(query){
   const feedUrl='https://news.google.com/rss/search?q='+encodeURIComponent(query)+'&hl=pt-BR&gl=BR&ceid=BR:pt-419';
-  let lastErr=null;
-  for(const buildProxyUrl of DD2_CORS_PROXIES){
-    try{
-      const r=await fetch(buildProxyUrl(feedUrl),{signal:AbortSignal.timeout(12000)});
-      if(!r.ok){lastErr=new Error('HTTP '+r.status);continue;}
-      const text=await r.text();
-      if(!text.includes('<item>')){lastErr=new Error('Resposta sem itens — possível bloqueio do provedor');continue;}
-      const items=dd2ParseGoogleNewsRSS(text);
-      if(items)return items;
-      lastErr=new Error('XML inválido');
-    }catch(e){lastErr=e;}
-  }
-  throw lastErr||new Error('Todos os provedores de busca de notícias falharam');
+  const r=await fetch(dd2ProxyUrl(feedUrl),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(15000)});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const text=await r.text();
+  if(!text.includes('<item>'))throw new Error('Resposta sem itens — possível bloqueio do provedor');
+  const items=dd2ParseGoogleNewsRSS(text);
+  if(!items)throw new Error('XML inválido');
+  return items;
 }
 
 // Dispara buscas em paralelo por cada categoria de risco (mesmas queries
