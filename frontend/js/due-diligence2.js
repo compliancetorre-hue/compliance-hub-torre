@@ -740,12 +740,17 @@ async function dd2ChamarEmLotes(fns,tamanhoLote=4,intervaloMs=350){
   return resultados;
 }
 
+// O rate limit do Portal é por JANELA DE MINUTO — um retry 700ms depois cai
+// na mesma janela já estourada e falha de novo (era o que acontecia: o aviso
+// "resultado pode estar incompleto" aparecia mesmo com retry). Agora são
+// duas rodadas de retry com esperas que dão tempo da janela virar.
 async function dd2ExecutarComRetry(fns){
-  const resultados=await dd2ChamarEmLotes(fns);
-  const pendentes=resultados.map((r,i)=>r.status==='rejected'?i:-1).filter(i=>i>=0);
-  if(pendentes.length){
-    await new Promise(r=>setTimeout(r,700));
-    const retry=await dd2ChamarEmLotes(pendentes.map(i=>fns[i]));
+  const resultados=await dd2ChamarEmLotes(fns,3,450);
+  for(const esperaMs of [3000,9000]){
+    const pendentes=resultados.map((r,i)=>r.status==='rejected'?i:-1).filter(i=>i>=0);
+    if(!pendentes.length)break;
+    await new Promise(r=>setTimeout(r,esperaMs));
+    const retry=await dd2ChamarEmLotes(pendentes.map(i=>fns[i]),3,450);
     pendentes.forEach((idxOriginal,j)=>{ resultados[idxOriginal]=retry[j]; });
   }
   return resultados;
@@ -772,7 +777,10 @@ async function dd2FetchBolsaFamilia(cpf){
     ? meses.map(anoMes=>()=>chamar('bolsa-familia-novo','nis='+nis+'&anoMesReferencia='+anoMes+'&pagina=1').then(d=>d.map(item=>({...item,_novo:true}))))
     : [];
 
-  const [resAntigas,resNovas]=await Promise.all([dd2ExecutarComRetry(antigasFns),dd2ExecutarComRetry(novasFns)]);
+  // Sequencial de propósito: rodar as duas bases em paralelo dobrava a
+  // pressão na mesma janela de rate-limit do Portal e derrubava as duas.
+  const resAntigas=await dd2ExecutarComRetry(antigasFns);
+  const resNovas=await dd2ExecutarComRetry(novasFns);
   const okAntigas=resAntigas.filter(r=>r.status==='fulfilled');
   const okNovas=resNovas.filter(r=>r.status==='fulfilled');
   // Falha PARCIAL (algumas chamadas de mês individuais falharam, não todas)
