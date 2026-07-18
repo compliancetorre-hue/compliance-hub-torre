@@ -773,33 +773,63 @@ async function dd2FetchBolsaFamilia(cpf){
 
   const {nis,falhou:nisFalhou}=await dd2ResolverNis(cpf);
   const antigasFns=meses.map(anoMes=>()=>chamar('bolsa-familia','codigo='+cpf+'&anoMesReferencia='+anoMes+'&pagina=1'));
-  const novasFns=nis
-    ? meses.map(anoMes=>()=>chamar('bolsa-familia-novo','nis='+nis+'&anoMesReferencia='+anoMes+'&pagina=1').then(d=>d.map(item=>({...item,_novo:true}))))
-    : [];
 
   // Sequencial de propósito: rodar as duas bases em paralelo dobrava a
   // pressão na mesma janela de rate-limit do Portal e derrubava as duas.
   const resAntigas=await dd2ExecutarComRetry(antigasFns);
-  const resNovas=await dd2ExecutarComRetry(novasFns);
   const okAntigas=resAntigas.filter(r=>r.status==='fulfilled');
-  const okNovas=resNovas.filter(r=>r.status==='fulfilled');
-  // Falha PARCIAL (algumas chamadas de mês individuais falharam, não todas)
-  // já é motivo pra avisar que o resultado pode estar incompleto — a busca
-  // dispara até ~28 chamadas simultâneas (1 por mês × 2 bases), então um
-  // rate-limit parcial no meio do caminho antes só era mascarado como "sem
-  // parcelas nesses meses" em vez de reportado como falha.
   const antigasParcialFalhou=okAntigas.length<meses.length;
-  const novasParcialFalhou=!!nis&&okNovas.length<meses.length;
+
+  // ── Base nova (novo-bolsa-familia-sacado-por-nis) — estratégia adaptativa.
+  // O contrato lista anoMesReferencia como filtro, mas na prática QUALQUER
+  // consulta com ele devolve 400 {"Erro na API":"Erro ao executar a
+  // consulta"} (visto ao vivo no Network — todos os meses, sempre; não é
+  // rate limit). Então: 1º tenta SEM filtro de mês, paginando tudo do NIS e
+  // filtrando o período aqui no cliente (de quebra são ~2 chamadas em vez de
+  // 14); se falhar, tenta mês a mês com anoMesCompetencia; por último, o
+  // anoMesReferencia original.
+  let novasItems=[];let novasParcialFalhou=false;let novasTotalFalhou=false;
+  if(nis){
+    const marcaNovo=d=>d.map(item=>({...item,_novo:true}));
+    const setMeses=new Set(meses.map(String));
+    const mesDoItem=it=>String(it.dataMesCompetencia||it.dataMesReferencia||'').slice(0,7).replace('-','');
+    try{
+      const tudo=[];
+      for(let p=1;p<=10;p++){
+        const pag=await chamar('bolsa-familia-novo','nis='+nis+'&pagina='+p);
+        tudo.push(...pag);
+        if(!pag.length)break;
+        if(p===10)novasParcialFalhou=true; // ainda podia haver mais páginas
+      }
+      novasItems=marcaNovo(tudo.filter(it=>{const m=mesDoItem(it);return !m||setMeses.has(m);}));
+    }catch(e1){
+      let resNovas=null;
+      for(const paramMes of ['anoMesCompetencia','anoMesReferencia']){
+        try{ await chamar('bolsa-familia-novo','nis='+nis+'&'+paramMes+'='+meses[meses.length-1]+'&pagina=1'); }
+        catch(eProbe){ continue; } // variante também quebra — nem dispara os 14 meses
+        const fns=meses.map(anoMes=>()=>chamar('bolsa-familia-novo','nis='+nis+'&'+paramMes+'='+anoMes+'&pagina=1'));
+        resNovas=await dd2ExecutarComRetry(fns);
+        break;
+      }
+      if(resNovas){
+        const ok=resNovas.filter(r=>r.status==='fulfilled');
+        novasParcialFalhou=ok.length<meses.length;
+        novasItems=marcaNovo(ok.flatMap(r=>r.value));
+      } else {
+        novasTotalFalhou=true;
+      }
+    }
+  }
 
   // Zero sucesso nas DUAS bases é falha de verdade — antes só disparava
   // quando o NIS tinha sido resolvido, deixando escapar em silêncio o caso
   // (mais comum) de resolução de NIS falhar E a base antiga falhar junto.
-  if(okAntigas.length===0 && okNovas.length===0 && meses.length>0) throw new Error('Todas as consultas de Bolsa Família falharam');
+  if(okAntigas.length===0 && meses.length>0 && (!nis||novasTotalFalhou)) throw new Error('Todas as consultas de Bolsa Família falharam');
 
   return {
-    items:[...okAntigas.flatMap(r=>r.value), ...okNovas.flatMap(r=>r.value)],
+    items:[...okAntigas.flatMap(r=>r.value), ...novasItems],
     baseAntigaFalhou:antigasParcialFalhou,
-    baseNovaFalhou:novasParcialFalhou,
+    baseNovaFalhou:novasParcialFalhou||novasTotalFalhou,
     nisNaoEncontrado:!nis&&!nisFalhou,
     nisFalhouAoConsultar:nisFalhou,
   };
