@@ -33,17 +33,22 @@ function ddSwitchTab(tab){
 
 // ── GOOGLE URL ────────────────────────────
 function ddG(q){return{url:'https://www.google.com/search?q='+encodeURIComponent(q),query:q,isGoogle:true};}
-// Google Notícias — usa a URL atual do produto (news.google.com/search) em
-// vez do parâmetro antigo "&tbm=nws", que a Google vem descontinuando aos
-// poucos e passou a devolver página de erro/redirecionamento em várias
-// contas e regiões.
-function ddGT(q){return{url:'https://news.google.com/search?q='+encodeURIComponent(q)+'&hl=pt-BR&gl=BR&ceid=BR:pt-419',query:q+' [NOTÍCIAS]',isGoogle:true};}
+function ddGT(q){return{url:'https://www.google.com/search?q='+encodeURIComponent(q)+'&tbm=nws',query:q+' [NOTÍCIAS]',isGoogle:true};}// Google Notícias
 function ddA(url,q){return{url,query:q,isGoogle:false};}
 
 // ── BOOLEAN SEARCH BUILDER ────────────────
 // Constrói queries booleanas profissionais para mídias negativas
-function buildBooleanQuery(alvo, doc){
-  const base = `"${alvo}"`;
+function buildBooleanQuery(alvo, doc, alt){
+  // "alt" é um nome alternativo pro mesmo alvo (nome fantasia de uma
+  // empresa, por ex.) — a imprensa quase nunca escreve a razão social
+  // completa ("X HOLDING FINANCEIRA LTDA"), só o nome fantasia ("X Bank").
+  // Sem essa alternativa a busca em Notícias fica presa a zero resultado
+  // pra qualquer empresa com nome fantasia diferente da razão social
+  // (confirmado ao vivo: razão social sozinha = 0, com o nome fantasia
+  // via OR = dezenas de resultados, pro mesmo caso real).
+  const base = (alt && alt.trim() && alt.trim().toLowerCase()!==alvo.trim().toLowerCase())
+    ? `("${alvo}" OR "${alt}")`
+    : `"${alvo}"`;
   const docStr = doc ? ` "${doc}"` : '';
 
   return {
@@ -51,8 +56,8 @@ function buildBooleanQuery(alvo, doc){
     financeiro: `${base}${docStr} AND (fraude OR "pirâmide financeira" OR Ponzi OR insolvência OR inadimplência OR offshore OR "evasão de divisas" OR "crimes financeiros" OR falência OR "recuperação judicial" OR protesto OR inadimplente OR estelionato) -site:instagram.com -site:facebook.com`,
     regulatorio: `${base}${docStr} AND (sanção OR "improbidade administrativa" OR OFAC OR blacklist OR "investigação MP" OR "Ministério Público" OR CVM OR BACEN OR "processo administrativo" OR interdição OR cassação OR suspenso) -site:instagram.com -site:facebook.com`,
     reputacional: `${base}${docStr} AND (escândalo OR denúncia OR "assédio moral" OR "assédio sexual" OR "desastre ambiental" OR "multa IBAMA" OR "direitos humanos" OR "trabalho análogo" OR golpe OR fraude OR calote OR enganou) -site:instagram.com`,
-    pep: `"${alvo}" AND ("cargo público" OR "servidor público" OR governador OR senador OR deputado OR prefeito OR secretário OR ministro OR "Pessoa Politicamente Exposta" OR PEP OR "partido político")`,
-    recente: `"${alvo}"${docStr} after:${new Date(Date.now()-365*24*60*60*1000).toISOString().split('T')[0]}`,
+    pep: `${base} AND ("cargo público" OR "servidor público" OR governador OR senador OR deputado OR prefeito OR secretário OR ministro OR "Pessoa Politicamente Exposta" OR PEP OR "partido político")`,
+    recente: `${base}${docStr} after:${new Date(Date.now()-365*24*60*60*1000).toISOString().split('T')[0]}`,
   };
 }
 
@@ -106,11 +111,12 @@ async function ddTryApi(url,name,line){
 // ── NORMALIZE ─────────────────────────────
 function ddNorm(d,api){
   try{
-    let o={razao:'',situacao:'',abertura:'',porte:'',natureza:'',capital:'',email:'',telefone:'',uf:'',municipio:'',endereco:'',cnae_pri:{cod:'',desc:''},cnaes_sec:[],socios:[]};
+    let o={razao:'',fantasia:'',situacao:'',abertura:'',porte:'',natureza:'',capital:'',capitalNum:null,email:'',telefone:'',uf:'',municipio:'',endereco:'',cnae_pri:{cod:'',desc:''},cnaes_sec:[],socios:[]};
     if(api==='BrasilAPI'||d.cnae_fiscal!==undefined){
-      o.razao=d.razao_social||'';o.situacao=d.descricao_situacao_cadastral||String(d.situacao_cadastral||'')||'';
+      o.razao=d.razao_social||'';o.fantasia=d.nome_fantasia||'';o.situacao=d.descricao_situacao_cadastral||String(d.situacao_cadastral||'')||'';
       o.abertura=d.data_inicio_atividade||'';o.porte=d.descricao_porte||'';o.natureza=d.natureza_juridica||'';
       o.capital=d.capital_social!=null?'R$ '+Number(d.capital_social).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
+      o.capitalNum=d.capital_social!=null?Number(d.capital_social):null;
       o.email=d.email||'';o.telefone=d.ddd_telefone_1?`(${d.ddd_telefone_1}) ${d.telefone_1||''}`:'';
       o.uf=d.uf||'';o.municipio=d.municipio||'';
       o.endereco=[d.logradouro,d.numero,d.complemento,d.bairro,d.municipio,d.uf,d.cep].filter(Boolean).join(', ');
@@ -118,8 +124,8 @@ function ddNorm(d,api){
       o.cnaes_sec=(d.cnaes_secundarios||[]).map(c=>({cod:String(c.codigo||''),desc:c.descricao||''}));
       o.socios=(d.qsa||[]).map(s=>({nome:s.nome_socio||s.nome||'',qual:s.qualificacao_socio||''}));
     }else if(api==='ReceitaWS'||d.nome){
-      o.razao=d.nome||'';o.situacao=d.situacao||'';o.abertura=d.abertura||'';o.porte=d.porte||'';o.natureza=d.natureza_juridica||'';
-      o.capital=d.capital_social||'';o.email=d.email||'';o.telefone=d.telefone||'';
+      o.razao=d.nome||'';o.fantasia=d.fantasia||'';o.situacao=d.situacao||'';o.abertura=d.abertura||'';o.porte=d.porte||'';o.natureza=d.natureza_juridica||'';
+      o.capital=d.capital_social||'';o.capitalNum=d.capital_social!=null&&!isNaN(Number(d.capital_social))?Number(d.capital_social):null;o.email=d.email||'';o.telefone=d.telefone||'';
       o.uf=d.uf||'';o.municipio=d.municipio||'';
       o.endereco=[d.logradouro,d.numero,d.complemento,d.bairro,d.municipio,d.uf,d.cep].filter(Boolean).join(', ');
       o.cnae_pri={cod:(d.atividade_principal||[])[0]?.code||'',desc:(d.atividade_principal||[])[0]?.text||''};
@@ -127,9 +133,10 @@ function ddNorm(d,api){
       o.socios=(d.qsa||[]).map(s=>({nome:s.nome||'',qual:s.qual||''}));
     }else if(d.estabelecimento){
       const e=d.estabelecimento||{};
-      o.razao=d.razao_social||'';o.situacao=e.situacao_cadastral||'';o.abertura=e.data_inicio_atividade||'';
+      o.razao=d.razao_social||'';o.fantasia=e.nome_fantasia||'';o.situacao=e.situacao_cadastral||'';o.abertura=e.data_inicio_atividade||'';
       o.porte=(d.porte||{}).descricao||'';o.natureza=(d.natureza_juridica||{}).descricao||'';
       o.capital=d.capital_social!=null?'R$ '+Number(d.capital_social).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
+      o.capitalNum=d.capital_social!=null?Number(d.capital_social):null;
       o.email=e.email||'';o.telefone=e.ddd1?`(${e.ddd1}) ${e.telefone1||''}`:'';
       o.uf=(e.estado||{}).sigla||'';o.municipio=(e.cidade||{}).nome||'';
       o.endereco=[e.tipo_logradouro,e.logradouro,e.numero,e.complemento,e.bairro,(e.cidade||{}).nome,(e.estado||{}).sigla,e.cep].filter(Boolean).join(', ');
