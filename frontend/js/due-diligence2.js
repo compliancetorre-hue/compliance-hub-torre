@@ -47,6 +47,9 @@ function dd2HTML(){return `
 .dd2-score-breakdown-item b{color:#0f2d4a}
 .dd2-score-breakdown-pts{font-weight:700;flex-shrink:0}
 .dd2-score-critico{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:8px 12px;font-size:.8rem;font-weight:700;margin-bottom:6px}
+.dd2-socio-bloco{border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;background:#fff;overflow:hidden}
+.dd2-socio-bloco.hit{border-color:#fecaca;background:#fffbfa}
+.dd2-socio-head{display:flex;align-items:center;gap:10px;padding:10px 14px;flex-wrap:wrap}
 .dd2-pillar{flex:1;min-width:120px;background:#f0f4f8;border-radius:8px;padding:12px;text-align:center}
 .dd2-pillar-icon{font-size:1.4rem}
 .dd2-pillar-label{font-size:.72rem;color:#64748b;margin:4px 0}
@@ -127,6 +130,7 @@ function dd2HTML(){return `
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-fiscal" checked> &#128188; Situação Fiscal</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-judicial" checked> &#9878; Processos Judiciais</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-sancoes" checked> &#128171; Sanções e Restrições</label>
+      <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-socios" checked> &#128101; Investigação dos Sócios (CNPJ)</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-pep" checked> &#127963; PEP</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-midia"> &#128240; Mídia Negativa</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-diarios" checked> &#128240; Diários Oficiais (DOU + Municipais)</label>
@@ -153,6 +157,7 @@ function dd2HTML(){return `
       <span class="dd2-step" id="dd2-step-fiscal">&#128188; Fiscal</span>
       <span class="dd2-step" id="dd2-step-judicial">&#9878; Judicial</span>
       <span class="dd2-step" id="dd2-step-sancoes">&#128171; Sanções</span>
+      <span class="dd2-step" id="dd2-step-socios">&#128101; Sócios</span>
       <span class="dd2-step" id="dd2-step-pep">&#127963; PEP</span>
       <span class="dd2-step" id="dd2-step-midia">&#128240; Mídia</span>
       <span class="dd2-step" id="dd2-step-diarios">&#128240; Diários</span>
@@ -185,6 +190,10 @@ function dd2HTML(){return `
       <div class="dd2-card-title">&#128101; Quadro Societário (QSA)</div>
       <div id="dd2-qsa-content"></div>
     </div>
+    <div class="dd2-card" id="dd2-sec-socios" style="display:none">
+      <div class="dd2-card-title">&#128373; Investigação dos Sócios</div>
+      <div id="dd2-socios-content"><div class="dd2-loading">&#9203; Investigando cada sócio (PEP, sanções, mídia negativa)...</div></div>
+    </div>
     <div class="dd2-card" id="dd2-sec-fiscal">
       <div class="dd2-card-title">&#128188; Situação Fiscal</div>
       <div id="dd2-fiscal-content"><div class="dd2-loading">&#9203; Verificando situação fiscal...</div></div>
@@ -194,7 +203,7 @@ function dd2HTML(){return `
       <div id="dd2-judicial-content"><div class="dd2-loading">&#9203; Consultando o Diário de Justiça Eletrônico Nacional...</div></div>
     </div>
     <div class="dd2-card" id="dd2-sec-sancoes">
-      <div class="dd2-card-title">&#128171; Sanções e Restrições (CEIS, CNEP, Leniência, CEPIM, CEAF, Internacional)</div>
+      <div class="dd2-card-title">&#128171; Sanções e Restrições (CEIS, CNEP, Leniência, CEPIM, CEAF, TCU, Internacional)</div>
       <div id="dd2-sancoes-content"><div class="dd2-loading">&#9203; Consultando Portal da Transparência...</div></div>
     </div>
     <div class="dd2-card" id="dd2-sec-pep">
@@ -266,6 +275,10 @@ let dd2BolsaData = [];
 // pra dd2RenderScore poder classificar cada comunicação por polo (réu vs
 // autor) sem precisar re-buscar quem foi pesquisado.
 let dd2JudicialNomesAlvo = [];
+// Investigação individual dos sócios (QSA): um item por sócio com os
+// achados de cada base — alimenta o card próprio, o score e o checklist.
+let dd2SociosData = [];
+let dd2SociosFalhou = false;
 
 function dd2FormatDoc(input){
   const tipo = document.getElementById('dd2-tipo').value;
@@ -325,6 +338,7 @@ async function dd2Iniciar(){
   const scFis=document.getElementById('dd2-sc-fiscal').checked;
   const scJud=document.getElementById('dd2-sc-judicial').checked;
   const scSan=document.getElementById('dd2-sc-sancoes').checked;
+  const scSocios=document.getElementById('dd2-sc-socios')?.checked??false;
   const scPep=document.getElementById('dd2-sc-pep').checked;
   const scMid=document.getElementById('dd2-sc-midia').checked;
   const scDiarios=document.getElementById('dd2-sc-diarios').checked;
@@ -334,7 +348,7 @@ async function dd2Iniciar(){
   document.getElementById('dd2-sec-midia').style.display=scMid?'block':'none';
   document.getElementById('dd2-sec-bolsa').style.display=scBolsa?'block':'none';
   dd2SetProgress(5);
-  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[],leniencia:[],cepim:[],ceaf:[],internacional:[]};dd2PepData=[];dd2PepFalhou=false;dd2MidiaData=[];dd2MidiaFalhou=false;dd2DiariosData=[];dd2BolsaData=[];
+  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[],leniencia:[],cepim:[],ceaf:[],tcu:[],internacional:[]};dd2PepData=[];dd2PepFalhou=false;dd2MidiaData=[];dd2MidiaFalhou=false;dd2DiariosData=[];dd2BolsaData=[];dd2SociosData=[];dd2SociosFalhou=false;dd2JudicialNomesAlvo=[];
   const tasks=[];
 
   // Failsafe: se alguma chamada travar inesperadamente, libera a tela mesmo assim
@@ -479,13 +493,16 @@ async function dd2Iniciar(){
           (!semDoc&&tipo==='cnpj')?chamar('cepim','cnpjSancionado='+doc):Promise.resolve([]),
           (!semDoc&&tipo==='cpf')?chamar('ceaf','cpfSancionado='+doc):Promise.resolve([]),
           nomeParaSancao?dd2FetchSanctionsNetwork(nomeParaSancao):Promise.resolve([]),
+          semDoc?Promise.resolve([]):dd2FetchTCUInidoneos().then(items=>dd2TcuPorDocumento(items,doc)),
         ]).then(resultados=>[resultados,nomeParaSancao]);
-      }).then(([[ceisRes,cnepRes,lenRes,cepimRes,ceafRes,intRes],nomeParaSancao])=>{
+      }).then(([[ceisRes,cnepRes,lenRes,cepimRes,ceafRes,intRes,tcuRes],nomeParaSancao])=>{
         const pega=r=>r.status==='fulfilled'&&Array.isArray(r.value)?r.value:[];
         dd2SancoesData={
           ceis:pega(ceisRes),cnep:pega(cnepRes),leniencia:pega(lenRes),cepim:pega(cepimRes),ceaf:pega(ceafRes),
+          tcu:pega(tcuRes),
           internacional:dd2FiltrarRuidoSancoesIntl(pega(intRes),nomeParaSancao),
           ceisFalhou:!semDoc&&ceisRes.status==='rejected',cnepFalhou:!semDoc&&cnepRes.status==='rejected',
+          tcuFalhou:!semDoc&&tcuRes.status==='rejected',
           semDocumento:semDoc,
         };
         dd2SetStep('sancoes',(!semDoc&&ceisRes.status==='rejected'&&cnepRes.status==='rejected')?'error':'done');dd2SetProgress(65);
@@ -495,6 +512,33 @@ async function dd2Iniciar(){
   } else {
     dd2SetStep('sancoes','done');
     document.getElementById('dd2-sancoes-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta de sanções não selecionada.</p>';
+  }
+  // ── Investigação individual dos sócios (só CNPJ — CPF não tem QSA) ──
+  if(scSocios&&tipo==='cnpj'){
+    dd2SetStep('socios','active');
+    document.getElementById('dd2-sec-socios').style.display='block';
+    document.getElementById('dd2-socios-content').innerHTML='<div class="dd2-loading">&#9203; Investigando cada sócio (PEP, sanções, TCU, mídia negativa)...</div>';
+    tasks.push(
+      cadastralPromise.then(cad=>{
+        const socios=(cad?.socios||[]).filter(s=>s.nome);
+        if(!socios.length){
+          document.getElementById('dd2-socios-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Nenhum sócio listado no QSA — nada a investigar.</p>';
+          dd2SetStep('socios','done');
+          return;
+        }
+        return dd2InvestigarSocios(socios).then(res=>{
+          dd2SociosData=res;dd2SociosFalhou=false;
+          dd2RenderSocios(res);
+          dd2SetStep('socios','done');dd2SetProgress(72);
+        });
+      }).catch(()=>{
+        dd2SociosFalhou=true;dd2SetStep('socios','error');
+        document.getElementById('dd2-socios-content').innerHTML='<p style="color:#ef4444">⚠️ Não foi possível concluir a investigação automática dos sócios — use os links manuais da seção Judicial.</p>';
+      })
+    );
+  } else {
+    dd2SetStep('socios','done');
+    document.getElementById('dd2-sec-socios').style.display='none';
   }
   if(scPep){
     dd2SetStep('pep','active');
@@ -1106,6 +1150,43 @@ function dd2FiltrarRuidoSancoesIntl(hits,nomeConsultado){
   });
 }
 
+// ── TCU — Licitantes declarados inidôneos ──
+// Lista oficial de empresas/pessoas declaradas inidôneas pelo Tribunal de
+// Contas da União (art. 46 da Lei 8.443/92) — proibidas de participar de
+// licitação federal. A API (ORDS) é pública e a lista completa é pequena
+// (~100 registros, hasMore:false com limit=10000 — verificado ao vivo),
+// então baixamos tudo UMA vez por investigação e filtramos no cliente.
+// A API não manda header CORS, por isso passa pela rota /proxy da Edge
+// Function (exige "contas.tcu.gov.br" na whitelist de domínios do proxy).
+const DD2_TCU_URL='https://contas.tcu.gov.br/ords/condenacao/consulta/inidoneos?limit=10000';
+let dd2TcuListaPromise=null;
+function dd2FetchTCUInidoneos(){
+  if(!dd2TcuListaPromise){
+    dd2TcuListaPromise=fetch(dd2ProxyUrl(DD2_TCU_URL),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(15000)})
+      .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+      .then(d=>Array.isArray(d?.items)?d.items:[])
+      .catch(e=>{dd2TcuListaPromise=null;throw e;}); // não cacheia falha
+  }
+  return dd2TcuListaPromise;
+}
+
+function dd2TcuPorDocumento(items,docNum){
+  if(!docNum)return[];
+  return items.filter(i=>(i.cpf_cnpj||'').replace(/\D/g,'')===docNum);
+}
+
+// Match por nome (pros sócios, que no QSA vêm sem CPF completo) — usa o
+// mesmo critério de tokens distintivos das sanções internacionais. É
+// indício, não confirmação (homônimos existem) — o render deixa isso claro.
+function dd2TcuPorNome(items,nome){
+  const tokensAlvo=dd2TokensRelevantes(nome);
+  if(tokensAlvo.length<2)return[]; // 1 token só = homônimo quase certo, não aponta
+  return items.filter(i=>{
+    const tokensItem=new Set(dd2TokensRelevantes(i.nome||''));
+    return tokensAlvo.filter(t=>tokensItem.has(t)).length>=Math.min(tokensAlvo.length,3);
+  });
+}
+
 const DD2_POLO_LABEL={A:'Ativo',P:'Passivo',T:'Terceiro',D:'Outro'};
 
 // Identifica o polo (A/P/T/D) do alvo pesquisado numa comunicação do DJEN,
@@ -1200,6 +1281,16 @@ function dd2MotivoSancaoHTML(item,base){
       ${p.paginaDOU?`<div><b>Diário Oficial:</b> página ${escapeHtml(p.paginaDOU)}${p.secaoDOU?', seção '+escapeHtml(p.secaoDOU):''}</div>`:''}
     `;
   }
+  if(base==='TCU'){
+    return `
+      <div><b>Nome na lista:</b> ${escapeHtml(item.nome)||'—'} ${item.cpf_cnpj?'('+escapeHtml(item.cpf_cnpj)+')':''}</div>
+      ${item.processo?`<div><b>Processo TCU:</b> ${escapeHtml(item.processo)}</div>`:''}
+      ${item.deliberacao?`<div><b>Deliberação:</b> ${escapeHtml(item.deliberacao)}</div>`:''}
+      ${item.data_final?`<div><b>Inidoneidade vigente até:</b> ${escapeHtml(String(item.data_final).slice(0,10))}</div>`:''}
+      <div style="margin-top:4px;color:#64748b">Empresa/pessoa declarada inidônea pra participar de licitação na Administração Pública Federal (art. 46 da Lei 8.443/92).</div>
+      <div style="margin-top:8px"><a href="https://portal.tcu.gov.br/responsabilizacao-publica/licitantes-inidoneas/" target="_blank" onclick="event.stopPropagation()" class="dd2-link-ext" style="padding:4px 9px;font-size:.72rem">🔗 Conferir na lista oficial do TCU</a></div>
+    `;
+  }
   // Internacional (sanctions.network — OFAC/ONU/UE)
   return `
     ${item.remarks?`<div><b>Motivo / observação:</b> ${escapeHtml(item.remarks)}</div>`:'<div style="color:#94a3b8">Nenhum motivo detalhado disponível nesta base.</div>'}
@@ -1226,12 +1317,15 @@ function dd2NormalizarSancao(item,base){
   if(base==='CEAF'){
     return{descricao:(item.tipoPunicao?.descricao||'Punição disciplinar')+(item.cargoEfetivo?' — '+item.cargoEfetivo:''),orgao:item.orgaoLotacao?.nome||'—',inicio:item.dataPublicacao,fim:null};
   }
+  if(base==='TCU'){
+    return{descricao:'Declarado inidôneo pelo TCU'+(item.processo?' — processo '+item.processo:''),orgao:'Tribunal de Contas da União',inicio:item.data_transito_julgado?String(item.data_transito_julgado).slice(0,10):null,fim:item.data_final?String(item.data_final).slice(0,10):null};
+  }
   // Internacional (sanctions.network — OFAC/ONU/UE)
   return{descricao:'Sanção internacional'+(item.source?' — '+String(item.source).toUpperCase():'')+((item.positions||[]).length?' — '+item.positions.join(', '):''),orgao:(item.names||[]).join(', ')||'—',inicio:item.listed_on,fim:null};
 }
 
 function dd2SanTotal(d){
-  return (d?.ceis||[]).length+(d?.cnep||[]).length+(d?.leniencia||[]).length+(d?.cepim||[]).length+(d?.ceaf||[]).length+(d?.internacional||[]).length;
+  return (d?.ceis||[]).length+(d?.cnep||[]).length+(d?.leniencia||[]).length+(d?.cepim||[]).length+(d?.ceaf||[]).length+(d?.tcu||[]).length+(d?.internacional||[]).length;
 }
 
 function dd2RenderSancoes(d){
@@ -1239,15 +1333,17 @@ function dd2RenderSancoes(d){
   const falhouTudo=!!(d?.ceisFalhou&&d?.cnepFalhou);
   if(falhouTudo){el.innerHTML='<p style="color:#ef4444;font-weight:600">⚠️ Não foi possível consultar as bases CEIS e CNEP automaticamente no momento.</p>';return;}
   let avisos='';
-  if(d?.semDocumento) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ CEIS, CNEP, Leniência, CEPIM e CEAF não foram verificados — essas bases exigem CPF/CNPJ. Só a base internacional (por nome) foi consultada.</p>';
+  if(d?.semDocumento) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ CEIS, CNEP, Leniência, CEPIM, CEAF e TCU não foram verificados — essas bases exigem CPF/CNPJ. Só a base internacional (por nome) foi consultada.</p>';
   else if(d?.ceisFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CEIS — resultado pode estar incompleto.</p>';
   else if(d?.cnepFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a base CNEP — resultado pode estar incompleto.</p>';
+  if(d?.tcuFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi possível consultar a lista de inidôneos do TCU — resultado pode estar incompleto. <a href="https://portal.tcu.gov.br/responsabilizacao-publica/licitantes-inidoneas/" target="_blank" class="dd2-link-ext" style="padding:2px 8px;font-size:.72rem">🔗 Conferir manualmente</a></p>';
   const all=[
     ...(d?.ceis||[]).map(s=>({...dd2NormalizarSancao(s,'CEIS'),_base:'CEIS',_raw:s})),
     ...(d?.cnep||[]).map(s=>({...dd2NormalizarSancao(s,'CNEP'),_base:'CNEP',_raw:s})),
     ...(d?.leniencia||[]).map(s=>({...dd2NormalizarSancao(s,'Leniência'),_base:'Leniência',_raw:s})),
     ...(d?.cepim||[]).map(s=>({...dd2NormalizarSancao(s,'CEPIM'),_base:'CEPIM',_raw:s})),
     ...(d?.ceaf||[]).map(s=>({...dd2NormalizarSancao(s,'CEAF'),_base:'CEAF',_raw:s})),
+    ...(d?.tcu||[]).map(s=>({...dd2NormalizarSancao(s,'TCU'),_base:'TCU',_raw:s})),
     ...(d?.internacional||[]).map(s=>({...dd2NormalizarSancao(s,'Internacional'),_base:'Internacional',_raw:s})),
   ];
   if(!all.length){el.innerHTML=avisos+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma sanção ou restrição encontrada nas bases consultadas.</p>';return;}
@@ -1255,9 +1351,14 @@ function dd2RenderSancoes(d){
   el.innerHTML=avisos+`<p style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">Clique numa linha para ver o motivo/fundamentação completa.</p><div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th></th><th>Base</th><th>Descrição</th><th>Órgão</th><th>Período</th><th>Status</th></tr></thead>
   <tbody>${all.map((s,i)=>{
     const semVigencia=s._base==='CEPIM'||s._base==='CEAF'||s._base==='Internacional';
-    const statusTxt=s.fim?'Encerrada':(semVigencia?'Registrado':'Vigente');
+    // "Encerrada" só quando a data-fim já passou — uma sanção com fim em
+    // data FUTURA está vigente (comum no TCU/CEIS, que publicam o prazo).
+    const hoje=new Date().toISOString().slice(0,10);
+    const fimOrd=s.fim?dd2DataDiarioOrdenavel(String(s.fim)):null;
+    const vigente=!semVigencia&&(!fimOrd||fimOrd>=hoje);
+    const statusTxt=semVigencia?'Registrado':(vigente?'Vigente':'Encerrada');
     const idRow='dd2-san-det-'+i;
-    return `<tr style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}')"><td style="width:18px;color:#94a3b8;font-size:.75rem" id="${idRow}-seta">▸</td><td><span class="dd2-badge danger">${s._base}</span></td><td>${escapeHtml(s.descricao)}</td><td>${escapeHtml(s.orgao)}</td><td>${escapeHtml(s.inicio)||'—'}${s.fim!=null?' – '+escapeHtml(s.fim):''}</td><td><span class="dd2-badge ${!s.fim&&!semVigencia?'danger':'warn'}">${statusTxt}</span></td></tr>
+    return `<tr style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}')"><td style="width:18px;color:#94a3b8;font-size:.75rem" id="${idRow}-seta">▸</td><td><span class="dd2-badge danger">${s._base}</span></td><td>${escapeHtml(s.descricao)}</td><td>${escapeHtml(s.orgao)}</td><td>${escapeHtml(s.inicio)||'—'}${s.fim!=null?' – '+escapeHtml(s.fim):''}</td><td><span class="dd2-badge ${vigente?'danger':'warn'}">${statusTxt}</span></td></tr>
     <tr id="${idRow}" style="display:none;background:#f8fafc"><td></td><td colspan="5" style="padding:10px 12px;font-size:.8rem;color:#334155;line-height:1.6">${dd2MotivoSancaoHTML(s._raw,s._base)}</td></tr>`;
   }).join('')}</tbody></table></div>
   ${temIntl?`<p style="font-size:.72rem;color:#94a3b8;margin-top:10px">⚠️ Resultados "Internacional" vêm de um agregador de terceiros (sanctions.network) não-oficial — use como indício, confirme na fonte primária (OFAC/ONU/UE) antes de qualquer decisão.</p>`:''}`;
@@ -1269,6 +1370,109 @@ function dd2RenderPep(data,falhou){
   if(!Array.isArray(data)||!data.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhum registro PEP encontrado.</p>';return;}
   el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Nome</th><th>Cargo / Função</th><th>Órgão</th><th>Período</th><th>Status</th></tr></thead>
   <tbody>${data.slice(0,50).map(p=>`<tr><td>${escapeHtml(p.nome)||'—'}</td><td>${escapeHtml(p.descricao_funcao)||'—'}</td><td>${escapeHtml(p.nome_orgao)||'—'}</td><td>${escapeHtml(p.dt_inicio_exercicio)||'—'} – ${escapeHtml(p.dt_fim_exercicio)||'atual'}</td><td><span class="dd2-badge pep">&#9888; PEP</span></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+// ═══ INVESTIGAÇÃO INDIVIDUAL DOS SÓCIOS (QSA) ═══
+// O QSA da Receita entrega só nome + qualificação (o CPF vem mascarado),
+// então toda a investigação de sócio é por NOME: PEP, CEIS/CNEP/CEAF (a
+// API do Portal aceita nomeSancionado — confirmado no OpenAPI oficial),
+// lista de inidôneos do TCU, sanções internacionais e mídia negativa.
+// Busca por nome tem risco de homônimo — cada achado é filtrado exigindo
+// que o nome retornado bata token a token com o do sócio (dd2NomesBatem),
+// e o render deixa claro que é indício a confirmar, não condenação.
+const DD2_SOCIOS_MAX=5;
+
+function dd2NomesBatem(nomeAlvo,nomeCandidato){
+  const tokensAlvo=dd2TokensRelevantes(nomeAlvo);
+  if(tokensAlvo.length<2)return false; // nome de 1 token = homônimo quase certo
+  const tokensCand=new Set(dd2TokensRelevantes(nomeCandidato));
+  const need=Math.max(2,Math.min(tokensAlvo.length,3));
+  return tokensAlvo.filter(t=>tokensCand.has(t)).length>=need;
+}
+
+async function dd2InvestigarSocios(socios){
+  const alvo=(socios||[]).filter(s=>s.nome).slice(0,DD2_SOCIOS_MAX);
+  const chamar=(rota,params)=>fetch(dd2PortalUrl(rota,params+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(12000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(d=>Array.isArray(d)?d:[]);
+  return Promise.all(alvo.map(async s=>{
+    const enc=encodeURIComponent(s.nome);
+    const [pepR,ceisR,cnepR,ceafR,intlR,tcuR,midiaR]=await Promise.allSettled([
+      dd2FetchPep(s.nome,''),
+      chamar('ceis','nomeSancionado='+enc),
+      chamar('cnep','nomeSancionado='+enc),
+      chamar('ceaf','nomeSancionado='+enc),
+      dd2FetchSanctionsNetwork(s.nome).then(h=>dd2FiltrarRuidoSancoesIntl(h,s.nome)),
+      dd2FetchTCUInidoneos().then(items=>dd2TcuPorNome(items,s.nome)),
+      dd2FetchGoogleNewsRSS(`"${s.nome}" AND (fraude OR corrupção OR condenado OR investigação OR "lavagem de dinheiro" OR crime OR golpe OR escândalo)`),
+    ]);
+    const pega=r=>r.status==='fulfilled'&&Array.isArray(r.value)?r.value:[];
+    return{
+      nome:s.nome,qual:s.qual||'',
+      pep:pega(pepR).filter(p=>dd2NomesBatem(s.nome,p.nome||'')),
+      ceis:pega(ceisR).filter(x=>dd2NomesBatem(s.nome,x.sancionado?.nome||x.pessoa?.nome||'')),
+      cnep:pega(cnepR).filter(x=>dd2NomesBatem(s.nome,x.sancionado?.nome||x.pessoa?.nome||'')),
+      ceaf:pega(ceafR).filter(x=>dd2NomesBatem(s.nome,x.punicao?.nomePunido||x.nomePunido||'')),
+      intl:pega(intlR),
+      tcu:pega(tcuR),
+      midia:pega(midiaR).slice(0,5),
+      falhas:{
+        pep:pepR.status==='rejected',ceis:ceisR.status==='rejected',cnep:cnepR.status==='rejected',
+        ceaf:ceafR.status==='rejected',intl:intlR.status==='rejected',tcu:tcuR.status==='rejected',midia:midiaR.status==='rejected',
+      },
+    };
+  }));
+}
+
+function dd2SocioTemAchado(s){
+  return !!(s.pep.length||s.ceis.length||s.cnep.length||s.ceaf.length||s.intl.length||s.tcu.length||s.midia.length);
+}
+
+function dd2RenderSocios(lista){
+  const el=document.getElementById('dd2-socios-content');
+  if(!lista.length){el.innerHTML='<p style="color:#64748b;font-size:.85rem">Nenhum sócio listado no QSA pra investigar.</p>';return;}
+  const blocos=lista.map((s,i)=>{
+    const badges=[];
+    if(s.ceis.length)badges.push('<span class="dd2-badge danger">CEIS</span>');
+    if(s.cnep.length)badges.push('<span class="dd2-badge danger">CNEP</span>');
+    if(s.tcu.length)badges.push('<span class="dd2-badge danger">TCU Inidôneo</span>');
+    if(s.intl.length)badges.push('<span class="dd2-badge danger">Sanção Internacional</span>');
+    if(s.ceaf.length)badges.push('<span class="dd2-badge danger">CEAF</span>');
+    if(s.pep.length)badges.push('<span class="dd2-badge pep">&#9888; PEP</span>');
+    if(s.midia.length)badges.push(`<span class="dd2-badge warn">&#128240; ${s.midia.length} notícia(s)</span>`);
+    const falhouAlgo=Object.values(s.falhas).some(Boolean);
+    const limpo=!badges.length;
+    if(limpo)badges.push(falhouAlgo?'<span class="dd2-badge warn">Parcialmente verificado</span>':'<span class="dd2-badge ok">&#9989; Nada encontrado</span>');
+    const idDet='dd2-socio-det-'+i;
+    const linhaBase=(rotulo,itens,fmt)=>itens.length?`<div style="margin-top:6px"><b>${rotulo}:</b><ul style="margin:4px 0 0 18px;padding:0">${itens.map(fmt).join('')}</ul></div>`:'';
+    const detalhe=`
+      ${linhaBase('PEP',s.pep,p=>`<li>${escapeHtml(p.nome)||'—'} — ${escapeHtml(p.descricao_funcao)||'—'} (${escapeHtml(p.nome_orgao)||'—'}, ${escapeHtml(p.dt_inicio_exercicio)||'—'} – ${escapeHtml(p.dt_fim_exercicio)||'atual'})</li>`)}
+      ${linhaBase('CEIS',s.ceis,x=>`<li>${escapeHtml(x.sancionado?.nome||x.pessoa?.nome)||'—'} — ${escapeHtml(x.tipoSancao?.descricaoResumida)||'sanção'} (${escapeHtml(x.orgaoSancionador?.nome)||'—'})</li>`)}
+      ${linhaBase('CNEP',s.cnep,x=>`<li>${escapeHtml(x.sancionado?.nome||x.pessoa?.nome)||'—'} — ${escapeHtml(x.tipoSancao?.descricaoResumida)||'sanção'} (${escapeHtml(x.orgaoSancionador?.nome)||'—'})</li>`)}
+      ${linhaBase('CEAF (punição disciplinar)',s.ceaf,x=>`<li>${escapeHtml(x.punicao?.nomePunido||x.nomePunido)||'—'} — ${escapeHtml(x.tipoPunicao?.descricao)||'punição'} (${escapeHtml(x.orgaoLotacao?.nome)||'—'})</li>`)}
+      ${linhaBase('TCU — inidôneos',s.tcu,x=>`<li>${escapeHtml(x.nome)||'—'} ${x.cpf_cnpj?'('+escapeHtml(x.cpf_cnpj)+')':''} — processo ${escapeHtml(x.processo)||'—'}${x.data_final?', vigente até '+escapeHtml(String(x.data_final).slice(0,10)):''}</li>`)}
+      ${linhaBase('Sanções internacionais (indício — confirmar na fonte)',s.intl,x=>`<li>${escapeHtml((x.names||[]).join(', '))||'—'}${x.source?' — '+escapeHtml(String(x.source).toUpperCase()):''}</li>`)}
+      ${linhaBase('Mídia negativa',s.midia,n=>`<li><a href="${escapeHtml(n.link)||'#'}" target="_blank" style="color:#0f2d4a">${escapeHtml(n.title)||'—'}</a> <span style="color:#94a3b8;font-size:.75rem">(${n.pubDate?new Date(n.pubDate).toLocaleDateString('pt-BR'):''} — ${escapeHtml(n.source?.name)||''})</span></li>`)}
+      ${limpo&&!falhouAlgo?'<div style="color:#22c55e;margin-top:6px">✅ Nenhum apontamento nas bases consultadas (PEP, CEIS, CNEP, CEAF, TCU, sanções internacionais e mídia negativa).</div>':''}
+      ${falhouAlgo?`<div style="color:#b45309;margin-top:6px">⚠️ Bases que falharam nesta consulta: ${Object.entries(s.falhas).filter(([,v])=>v).map(([k])=>k.toUpperCase()).join(', ')} — não é "nada encontrado", é "não verificado".</div>`:''}
+      <div style="margin-top:10px" class="dd2-links-ext">
+        <a href="https://www.jusbrasil.com.br/consulta-processual/?q=${encodeURIComponent(s.nome)}" target="_blank" class="dd2-link-ext">🔗 JusBrasil</a>
+        <a href="https://www.escavador.com/busca?q=${encodeURIComponent(s.nome)}" target="_blank" class="dd2-link-ext">🔗 Escavador</a>
+        <a href="https://news.google.com/search?q=${encodeURIComponent('"'+s.nome+'"')}&hl=pt-BR&gl=BR&ceid=BR:pt-419" target="_blank" class="dd2-link-ext">🔗 Google Notícias</a>
+        <a href="https://www.google.com/search?q=${encodeURIComponent('"'+s.nome+'" '+(s.qual?'sócio':''))}" target="_blank" class="dd2-link-ext">🔗 Google</a>
+      </div>`;
+    return `<div class="dd2-socio-bloco ${limpo?'':'hit'}">
+      <div class="dd2-socio-head" style="cursor:pointer" onclick="dd2ToggleDetalhe('${idDet}','block')">
+        <span style="color:#94a3b8;font-size:.75rem" id="${idDet}-seta">▸</span>
+        <span style="font-weight:700">&#128100; ${escapeHtml(s.nome)}</span>
+        <span style="color:#64748b;font-size:.78rem">${escapeHtml(s.qual)||''}</span>
+        <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${badges.join('')}</span>
+      </div>
+      <div id="${idDet}" style="display:none;padding:10px 14px;border-top:1px solid #e2e8f0;font-size:.82rem;color:#334155;line-height:1.55">${detalhe}</div>
+    </div>`;
+  }).join('');
+  const extras=(lista.length<(dd2CadastralData?.socios||[]).length)?`<p style="font-size:.75rem;color:#94a3b8;margin-top:8px">Investigação automática limitada aos ${DD2_SOCIOS_MAX} primeiros sócios do QSA — os demais aparecem nos links manuais da seção Judicial.</p>`:'';
+  el.innerHTML=`
+    <p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Cada sócio do QSA é verificado individualmente em: <strong>PEP</strong>, <strong>CEIS</strong>, <strong>CNEP</strong>, <strong>CEAF</strong>, <strong>inidôneos do TCU</strong>, <strong>sanções internacionais</strong> e <strong>mídia negativa</strong>. Clique num sócio pra ver o detalhe. Buscas por nome podem trazer homônimos — trate como indício e confirme pelo CPF na fonte antes de decidir.</p>
+    ${blocos}${extras}`;
 }
 
 const DD2_BOLSA_MANUAL_URL='https://portaldatransparencia.gov.br/beneficios/novo-bolsa-familia';
@@ -1469,12 +1673,38 @@ function dd2RenderScore(){
     soma(30,'CEAF — punição disciplinar de servidor');
     critico=true;motivosCriticos.push('CEAF — punição disciplinar de servidor público federal');
   });
+  (dd2SancoesData?.tcu||[]).forEach(t=>{
+    const vigente=!t.data_final||String(t.data_final).slice(0,10)>=hoje;
+    soma(vigente?40:22,`TCU — declarada inidônea${vigente?' (vigente)':' (encerrada)'}`);
+    critico=true;motivosCriticos.push('Declarada inidônea pelo TCU — proibida de licitar com a Administração Federal');
+  });
   (dd2SancoesData?.internacional||[]).forEach(()=>{
     soma(45,'Lista internacional (OFAC/ONU/UE)');
     critico=true;motivosCriticos.push('Sanção internacional (OFAC/ONU/UE) — risco crítico de compliance');
   });
   (dd2SancoesData?.leniencia||[]).forEach(()=>soma(18,'Acordo de leniência'));
   (dd2SancoesData?.cepim||[]).forEach(()=>soma(15,'CEPIM — impedida de celebrar convênio'));
+
+  // ── Sócios — apontamentos individuais sobem o risco da empresa ──
+  let sociosSancao=0,sociosIntl=0,sociosCeaf=0,sociosPep=0,sociosMidia=0;
+  dd2SociosData.forEach(s=>{
+    if(s.ceis.length||s.cnep.length||s.tcu.length)sociosSancao++;
+    if(s.intl.length)sociosIntl++;
+    if(s.ceaf.length)sociosCeaf++;
+    if(s.pep.length)sociosPep++;
+    if(s.midia.length)sociosMidia++;
+  });
+  if(sociosSancao>0){
+    soma(Math.min(40,sociosSancao*25),`${sociosSancao} sócio(s) com sanção formal (CEIS/CNEP/TCU)`);
+    critico=true;motivosCriticos.push('Sócio com sanção formal (CEIS/CNEP/TCU) — confirmar pelo CPF na fonte');
+  }
+  if(sociosIntl>0){
+    soma(Math.min(40,sociosIntl*30),`${sociosIntl} sócio(s) em lista internacional de sanções`);
+    critico=true;motivosCriticos.push('Sócio em lista internacional de sanções (indício — confirmar na fonte)');
+  }
+  if(sociosCeaf>0)soma(Math.min(24,sociosCeaf*12),`${sociosCeaf} sócio(s) com punição disciplinar (CEAF)`);
+  if(sociosPep>0)soma(Math.min(24,sociosPep*12),`${sociosPep} sócio(s) PEP`);
+  if(sociosMidia>0)soma(Math.min(20,sociosMidia*8),`${sociosMidia} sócio(s) com mídia negativa`);
 
   // ── PEP — cargo atual pesa mais que cargo encerrado ──
   if(!dd2PepFalhou&&dd2PepData.length>0){
@@ -1505,10 +1735,12 @@ function dd2RenderScore(){
   else if(score>=25){gauge.className='dd2-gauge-circle medium';label.textContent='RISCO MÉDIO';label.style.color='#f59e0b';}
   else{gauge.className='dd2-gauge-circle low';label.textContent='RISCO BAIXO';label.style.color='#22c55e';}
 
+  const sociosComAchado=dd2SociosData.filter(dd2SocioTemAchado).length;
   const pillars=[
     ...(tipo==='cnpj'?[{icon:'&#127963;',label:'Cadastral',cls:!d?'warn':(situacaoRegular?'ok':'bad'),txt:!d?'Não verificado':null}]:[]),
     {icon:'&#9878;',label:'Judicial',cls:(judPassivo+judAmbiguo)===0?'ok':'bad',txt:null},
     {icon:'&#128171;',label:'Sanções',cls:sancoesFalhouTudo?'warn':(sanTotal===0?'ok':'bad'),txt:sancoesFalhouTudo?'Não verificado':null},
+    ...(tipo==='cnpj'?[{icon:'&#128101;',label:'Sócios',cls:dd2SociosFalhou?'warn':(sociosComAchado===0?'ok':'bad'),txt:dd2SociosFalhou?'Não verificado':(sociosComAchado?`${sociosComAchado} com achados`:null)}]:[]),
     {icon:'&#127963;',label:'PEP',cls:dd2PepFalhou?'warn':(dd2PepData.length===0?'ok':'bad'),txt:dd2PepFalhou?'Não verificado':null},
     {icon:'&#128240;',label:'Mídia',cls:dd2MidiaFalhou?'warn':(dd2MidiaData.length===0?'ok':'bad'),txt:dd2MidiaFalhou?'Não verificado':null},
     {icon:'&#128220;',label:'Diários',cls:dd2DiariosData.length===0?'ok':'bad',txt:null},
@@ -1569,6 +1801,10 @@ function dd2RenderChecklist(){
     ]:[]),
     {state:judRisco===0?'ok':'bad',label:dd2JudicialData.length?`${dd2JudicialData.length} comunicação(ões) no DJEN — ${judPassivo} como réu/executado, ${judAmbiguo} sem polo identificado`:'Sem comunicações processuais no DJEN',icon:'&#9878;'},
     {state:sancoesFalhouTudo?'warn':(sanTotal===0?'ok':'bad'),label:sancoesFalhouTudo?'Não foi possível verificar sanções/restrições':(sanTotal?`${sanTotal} sanção(ões)/restrição(ões) encontrada(s)`:'Sem sanções ou restrições'),icon:'&#128171;'},
+    ...(tipo==='cnpj'?[(()=>{
+      const comAchado=dd2SociosData.filter(dd2SocioTemAchado).length;
+      return {state:dd2SociosFalhou?'warn':(comAchado===0?'ok':'bad'),label:dd2SociosFalhou?'Não foi possível investigar os sócios':(comAchado?`${comAchado} sócio(s) com apontamentos (PEP/sanções/mídia)`:(dd2SociosData.length?`${dd2SociosData.length} sócio(s) investigado(s) — sem apontamentos`:'Sócios não investigados')),icon:'&#128101;'};
+    })()]:[]),
     {state:dd2PepFalhou?'warn':(dd2PepData.length===0?'ok':'bad'),label:dd2PepFalhou?'Não foi possível verificar PEP':'Sem registro PEP',icon:'&#127963;'},
     {state:dd2MidiaFalhou?'warn':(dd2MidiaData.length===0?'ok':'bad'),label:dd2MidiaFalhou?'Não foi possível verificar mídia negativa automaticamente':'Sem notícias negativas',icon:'&#128240;'},
     {state:dd2DiariosData.length===0?'ok':'bad',label:dd2DiariosData.length?`${dd2DiariosData.length} menção(ões) em diários oficiais municipais`:'Sem menções em diários oficiais municipais',icon:'&#128240;'}
