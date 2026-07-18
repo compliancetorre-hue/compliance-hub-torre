@@ -671,19 +671,54 @@ function dd2BolsaMeses(){
 // "NIS não encontrado" — indistinguível de "consultei e essa pessoa
 // realmente não tem NIS cadastrado". Agora devolve {nis, falhou} pra a UI
 // mostrar a mensagem certa em cada caso.
+// Tenta em cascata, porque nenhuma fonte sozinha cobre todo mundo:
+// 1) /pessoa-fisica — só devolve NIS de quem TAMBÉM aparece em outros
+//    cadastros federais (servidor, sancionado, contratado...) — um
+//    beneficiário "puro" de Bolsa Família volta null aqui;
+// 2) /auxilio-emergencial-por-cpf-ou-nis — aceita CPF e a resposta traz
+//    beneficiario.nis. Cobre ~68 milhões de pessoas (2020/21), e quem
+//    recebia Bolsa Família foi inscrito automaticamente — na prática é o
+//    melhor resolvedor CPF→NIS público que existe;
+// 3) /bpc-por-cpf-ou-nis — mesmo padrão, cobre beneficiários do BPC.
 async function dd2ResolverNis(cpf){
+  let algumaFalhou=false;
+  // fonte 1: pessoa-fisica (registro?.nis direto)
   try{
     const r=await fetch(dd2PortalUrl('pessoa-fisica','cpf='+cpf),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)});
-    if(!r.ok){
-      const corpo=await r.text().catch(()=>'(sem corpo)');
-      console.warn('[DD2-DEBUG] pessoa-fisica cpf='+cpf,'status:',r.status,'corpo:',corpo);
-      return {nis:null,falhou:true};
+    if(!r.ok){algumaFalhou=true;}
+    else{
+      const d=await r.json();
+      const registro=Array.isArray(d)?d[0]:d;
+      if(registro?.nis)return {nis:registro.nis,falhou:false};
     }
-    const d=await r.json();
-    const registro=Array.isArray(d)?d[0]:d;
-    console.warn('[DD2-DEBUG] pessoa-fisica cpf='+cpf,'status:',r.status,'resposta:',JSON.stringify(d));
-    return {nis:registro?.nis||null,falhou:false};
-  }catch(e){ console.warn('[DD2-DEBUG] pessoa-fisica cpf='+cpf,'excecao:',e.message); return {nis:null,falhou:true}; }
+  }catch(e){ algumaFalhou=true; }
+  // fontes 2 e 3: benefícios consultáveis por CPF cuja resposta expõe o NIS
+  // do beneficiário (confirmado no OpenAPI oficial do Portal: BeneficiarioDTO
+  // e BeneficiarioBPCDTO têm campo "nis"). O CPF volta mascarado
+  // (***.234.567-**), então conferimos os dígitos do meio antes de aceitar.
+  const meioCpf=cpf.slice(3,9);
+  const extrairNis=(lista)=>{
+    for(const item of (Array.isArray(lista)?lista:[])){
+      for(const p of [item?.beneficiario,item?.responsavelAuxilioEmergencial,item?.titularBolsaFamilia]){
+        const cpfMasc=(p?.cpfFormatado||'').replace(/\D/g,'');
+        if(p?.nis&&p.nis!=='0'&&(!cpfMasc||cpfMasc.includes(meioCpf)))return p.nis;
+      }
+    }
+    return null;
+  };
+  for(const [rota,params] of [['auxilio-emergencial','codigoBeneficiario='+cpf],['bpc','codigo='+cpf]]){
+    try{
+      const r=await fetch(dd2PortalUrl(rota,params+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)});
+      if(!r.ok){
+        // 400 aqui inclui "rota não cadastrada na Edge Function" — trata como
+        // fonte indisponível e segue pras demais, sem derrubar a cadeia.
+        algumaFalhou=true;continue;
+      }
+      const nis=extrairNis(await r.json());
+      if(nis)return {nis,falhou:false};
+    }catch(e){ algumaFalhou=true; }
+  }
+  return {nis:null,falhou:algumaFalhou};
 }
 
 // Dispara as chamadas em lotes pequenos, com um intervalo entre lotes, e
