@@ -42,6 +42,11 @@ function dd2HTML(){return `
 .dd2-gauge-circle.high{border-color:#ef4444;color:#ef4444}
 .dd2-gauge-label{font-size:.75rem;font-weight:700;margin-top:6px;text-transform:uppercase;letter-spacing:.05em}
 .dd2-pillars{display:flex;gap:12px;flex-wrap:wrap;flex:1}
+.dd2-score-breakdown{flex-basis:100%;display:flex;flex-direction:column;gap:4px;margin-top:4px;padding-top:12px;border-top:1px solid #e2e8f0}
+.dd2-score-breakdown-item{display:flex;justify-content:space-between;gap:10px;font-size:.78rem;color:#334155}
+.dd2-score-breakdown-item b{color:#0f2d4a}
+.dd2-score-breakdown-pts{font-weight:700;flex-shrink:0}
+.dd2-score-critico{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:8px 12px;font-size:.8rem;font-weight:700;margin-bottom:6px}
 .dd2-pillar{flex:1;min-width:120px;background:#f0f4f8;border-radius:8px;padding:12px;text-align:center}
 .dd2-pillar-icon{font-size:1.4rem}
 .dd2-pillar-label{font-size:.72rem;color:#64748b;margin:4px 0}
@@ -170,6 +175,7 @@ function dd2HTML(){return `
         <div class="dd2-gauge-label" id="dd2-gauge-label">Calculando...</div>
       </div>
       <div class="dd2-pillars" id="dd2-pillars"></div>
+      <div class="dd2-score-breakdown" id="dd2-score-breakdown"></div>
     </div>
     <div class="dd2-card" id="dd2-sec-cadastral">
       <div class="dd2-card-title">&#127963; Dados Cadastrais</div>
@@ -256,6 +262,10 @@ let dd2MidiaData = [];
 let dd2MidiaFalhou = false;
 let dd2DiariosData = [];
 let dd2BolsaData = [];
+// Nomes usados na última busca do DJEN (alvo + sócios) — guardado à parte
+// pra dd2RenderScore poder classificar cada comunicação por polo (réu vs
+// autor) sem precisar re-buscar quem foi pesquisado.
+let dd2JudicialNomesAlvo = [];
 
 function dd2FormatDoc(input){
   const tipo = document.getElementById('dd2-tipo').value;
@@ -1098,6 +1108,30 @@ function dd2FiltrarRuidoSancoesIntl(hits,nomeConsultado){
 
 const DD2_POLO_LABEL={A:'Ativo',P:'Passivo',T:'Terceiro',D:'Outro'};
 
+// Identifica o polo (A/P/T/D) do alvo pesquisado numa comunicação do DJEN,
+// cruzando os nomes em destinatarios[] com o nome/sócios pesquisados (mesmo
+// critério de "2+ tokens relevantes em comum" já usado pra filtrar ruído em
+// dd2FiltrarRuidoSancoesIntl). Sem isso, o risco judicial só contava volume
+// de comunicações — um processo em que a empresa é AUTORA (ex.: cobrando
+// uma dívida) pesava igual a um em que ela é RÉ — o que não reflete risco
+// real nenhum.
+function dd2JudicialPoloAlvo(item,nomesAlvo){
+  const dests=item.destinatarios||[];
+  if(!dests.length||!nomesAlvo?.length)return null;
+  for(const d of dests){
+    const tokensDest=new Set(dd2TokensRelevantes(d.nome||''));
+    if(!tokensDest.size)continue;
+    for(const nomeAlvo of nomesAlvo){
+      const tokensAlvo=dd2TokensRelevantes(nomeAlvo);
+      if(!tokensAlvo.length)continue;
+      const min=tokensAlvo.length>=2?2:1;
+      const comuns=tokensAlvo.filter(t=>tokensDest.has(t));
+      if(comuns.length>=min)return d.polo;
+    }
+  }
+  return null;
+}
+
 // Usada tanto na tabela de Processos Judiciais quanto na de Sanções — cada
 // linha clicável revela uma linha de detalhe logo abaixo (teor da
 // comunicação, ou motivo/fundamentação da sanção).
@@ -1113,6 +1147,7 @@ function dd2ToggleDetalhe(id,displayAberto){
 function dd2RenderJudicial(res,nome,docNum,tipo,socios){
   const el=document.getElementById('dd2-judicial-content');
   const {items,rateLimited,algumaFalhou}=res;
+  dd2JudicialNomesAlvo=[nome,...(socios||[]).map(s=>s.nome)].filter(Boolean);
   let avisos='';
   if(rateLimited) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Limite de requisições do DJEN atingido — resultado pode estar incompleto. Tente novamente em cerca de 1 minuto.</p>';
   else if(algumaFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais buscas no DJEN falharam — resultado pode estar incompleto.</p>';
@@ -1123,7 +1158,9 @@ function dd2RenderJudicial(res,nome,docNum,tipo,socios){
     const fonte=link?`<a href="${escapeHtml(link)}" target="_blank" onclick="event.stopPropagation()" class="dd2-link-ext" style="padding:4px 9px;font-size:.73rem">🔗 Abrir</a>`:'<span style="color:#94a3b8;font-size:.73rem">—</span>';
     const idRow='dd2-jud-det-'+i;
     const resumo=(p.texto||'').trim();
-    return `<tr style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}')"><td style="width:18px;color:#94a3b8;font-size:.75rem" id="${idRow}-seta">▸</td><td style="font-size:.75rem">${escapeHtml(p.data_disponibilizacao)||'—'}</td><td><span class="dd2-badge info">${escapeHtml(p.siglaTribunal)}</span></td><td>${escapeHtml(p.tipoComunicacao)||'—'}</td><td>${escapeHtml(p.nomeClasse)||'—'}<br><span style="font-size:.73rem;color:#64748b">${escapeHtml(p.numeroprocessocommascara||p.numero_processo)||'—'} — ${dest}</span></td><td style="font-size:.75rem">${p._origem.map(o=>escapeHtml(o)).join(', ')}</td><td>${fonte}</td></tr>
+    const poloAlvo=dd2JudicialPoloAlvo(p,dd2JudicialNomesAlvo);
+    const poloBadge=poloAlvo==='P'?'<span class="dd2-badge danger" title="O alvo pesquisado aparece como parte passiva (réu/executado) nesta comunicação" style="margin-left:6px">RÉU/EXECUTADO</span>':'';
+    return `<tr style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}')"><td style="width:18px;color:#94a3b8;font-size:.75rem" id="${idRow}-seta">▸</td><td style="font-size:.75rem">${escapeHtml(p.data_disponibilizacao)||'—'}</td><td><span class="dd2-badge info">${escapeHtml(p.siglaTribunal)}</span></td><td>${escapeHtml(p.tipoComunicacao)||'—'}${poloBadge}</td><td>${escapeHtml(p.nomeClasse)||'—'}<br><span style="font-size:.73rem;color:#64748b">${escapeHtml(p.numeroprocessocommascara||p.numero_processo)||'—'} — ${dest}</span></td><td style="font-size:.75rem">${p._origem.map(o=>escapeHtml(o)).join(', ')}</td><td>${fonte}</td></tr>
     <tr id="${idRow}" style="display:none;background:#f8fafc"><td></td><td colspan="6" style="padding:10px 12px;font-size:.8rem;color:#334155;line-height:1.6;white-space:pre-wrap">${resumo?`<b>Resumo do teor da comunicação:</b><br>${escapeHtml(resumo.substring(0,800))}${resumo.length>800?'…':''}`:'<span style="color:#94a3b8">Teor da comunicação não disponível para exibição.</span>'}</td></tr>`;
   }).join('')}</tbody></table></div>`:`<p style="color:#22c55e;font-weight:600">✅ Nenhuma comunicação processual encontrada no DJEN.</p>`;
   el.innerHTML=`
@@ -1371,54 +1408,122 @@ function dd2RenderMidia(data,nome,docFmt,falhou,fantasia){
   </div>`).join('')+`<div style="margin-top:10px">${dd2LinksManuaisMidiaHTML(nome,docFmt,fantasia)}</div>`;
 }
 
+// Modelo de risco por severidade — cada fonte pesa proporcional à gravidade
+// real do que ela representa, não "achou algo = +X fixo" pra tudo. Duas
+// mudanças de fundo em relação ao modelo anterior:
+// 1) Sanção formal de autoridade (CEIS/CNEP/CEAF/lista internacional OFAC-
+//    ONU-UE) é tratada como "crítica": força RISCO ALTO mesmo que a soma de
+//    pontos não chegue no corte, porque uma empresa/pessoa formalmente
+//    impedida de contratar com o poder público (ou sancionada
+//    internacionalmente) é inaceitável pra uma decisão de negócio
+//    independente de quantos outros pilares vieram limpos.
+// 2) Processo judicial (DJEN) agora pesa pelo POLO do alvo na comunicação
+//    (réu/executado vs autor — ver dd2JudicialPoloAlvo), não só pela
+//    contagem bruta. Um processo em que o alvo é autor (cobrando alguém)
+//    não é sinal de risco; um em que ele é réu/executado é.
 function dd2RenderScore(){
   const gauge=document.getElementById('dd2-gauge');
   const label=document.getElementById('dd2-gauge-label');
   const pillarsEl=document.getElementById('dd2-pillars');
+  const breakdownEl=document.getElementById('dd2-score-breakdown');
+  const tipo=document.getElementById('dd2-tipo')?.value||'cnpj';
   let score=0;
+  let critico=false;
+  const motivosCriticos=[];
+  const pts=[]; // {label, valor} — pra composição transparente do score
+  const soma=(v,label)=>{ if(v<=0)return; score=Math.min(100,score+v); pts.push({label,valor:v}); };
+
+  // ── Cadastral (só CNPJ — CPF não tem situação/abertura/capital) ──
   const d=dd2CadastralData;
   const sit=d?.situacao||'';
-  if(sit&&!sit.toUpperCase().includes('ATIVA')&&!sit.toUpperCase().includes('REGULAR'))score+=30;
+  const situacaoRegular=!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR');
+  if(tipo==='cnpj'&&d){
+    if(!situacaoRegular)soma(30,`Situação cadastral irregular (${sit})`);
+    if(d.abertura){
+      const iso=dd2DataDiarioOrdenavel(d.abertura);
+      const dt=iso?new Date(iso):null;
+      if(dt&&!isNaN(dt)){
+        const meses=(Date.now()-dt.getTime())/(1000*60*60*24*30.44);
+        if(meses<12)soma(10,'Empresa aberta há menos de 12 meses');
+      }
+    }
+    if(d.capitalNum!=null&&d.capitalNum<=1000)soma(8,'Capital social muito baixo (≤ R$ 1.000)');
+  }
 
-  // Sanções/PEP/Mídia só somam pontos quando a consulta de fato rodou — uma
-  // falha de rede/autenticação vira "não verificado" (ver pillars abaixo),
-  // não "0 = limpo". Sem essa distinção, uma consulta que falhar em
-  // silêncio (ex.: 401 do token) zera o score mesmo sem checar nada.
+  // ── Sanções — cada base pesa pela gravidade formal que representa ──
   const sancoesFalhouTudo=!!(dd2SancoesData?.semDocumento||(dd2SancoesData?.ceisFalhou&&dd2SancoesData?.cnepFalhou));
   const sanTotal=dd2SanTotal(dd2SancoesData);
-  if(sanTotal>0)score=Math.min(100,score+40);
+  const hoje=new Date().toISOString().slice(0,10);
+  const ativa=s=>!s.dataFimSancao||dd2DataDiarioOrdenavel(s.dataFimSancao)>=hoje;
+  (dd2SancoesData?.ceis||[]).forEach(s=>{
+    const v=ativa(s)?35:20;
+    soma(v,`CEIS${ativa(s)?' (vigente)':' (encerrada)'}`);
+    critico=true;motivosCriticos.push('CEIS — impedida de licitar/contratar com a administração pública');
+  });
+  (dd2SancoesData?.cnep||[]).forEach(s=>{
+    const v=ativa(s)?35:20;
+    soma(v,`CNEP${ativa(s)?' (vigente)':' (encerrada)'}`);
+    critico=true;motivosCriticos.push('CNEP — empresa punida por corrupção (Lei Anticorrupção)');
+  });
+  (dd2SancoesData?.ceaf||[]).forEach(()=>{
+    soma(30,'CEAF — punição disciplinar de servidor');
+    critico=true;motivosCriticos.push('CEAF — punição disciplinar de servidor público federal');
+  });
+  (dd2SancoesData?.internacional||[]).forEach(()=>{
+    soma(45,'Lista internacional (OFAC/ONU/UE)');
+    critico=true;motivosCriticos.push('Sanção internacional (OFAC/ONU/UE) — risco crítico de compliance');
+  });
+  (dd2SancoesData?.leniencia||[]).forEach(()=>soma(18,'Acordo de leniência'));
+  (dd2SancoesData?.cepim||[]).forEach(()=>soma(15,'CEPIM — impedida de celebrar convênio'));
 
-  if(!dd2PepFalhou&&dd2PepData.length>0)score=Math.min(100,score+20);
+  // ── PEP — cargo atual pesa mais que cargo encerrado ──
+  if(!dd2PepFalhou&&dd2PepData.length>0){
+    const atual=dd2PepData.some(p=>!p.dt_fim_exercicio);
+    soma(atual?25:12,atual?'PEP em cargo atual':'PEP em cargo já encerrado');
+  }
 
-  // Processos judiciais (DJEN) e mídia negativa antes não entravam no
-  // score — por isso ele quase sempre vinha zerado: sanções/PEP raramente
-  // têm registro, e eram os únicos fatores considerados. Agora um volume
-  // relevante de comunicações processuais ou notícia negativa real também
-  // eleva o risco.
-  const judTotal=dd2JudicialData.length;
-  if(judTotal>=6)score=Math.min(100,score+25);
-  else if(judTotal>=3)score=Math.min(100,score+15);
-  else if(judTotal>=1)score=Math.min(100,score+8);
+  // ── Judicial (DJEN) — por polo do alvo, não só contagem ──
+  let judPassivo=0,judAmbiguo=0,judAtivo=0;
+  dd2JudicialData.forEach(item=>{
+    const polo=dd2JudicialPoloAlvo(item,dd2JudicialNomesAlvo);
+    if(polo==='P')judPassivo++;
+    else if(polo==='A')judAtivo++;
+    else judAmbiguo++;
+  });
+  if(judPassivo>0)soma(Math.min(35,judPassivo*12),`${judPassivo} comunicação(ões) como réu/executado no DJEN`);
+  if(judAmbiguo>0)soma(Math.min(15,judAmbiguo*4),`${judAmbiguo} comunicação(ões) no DJEN sem polo identificado`);
+  if(judPassivo>=3){critico=true;motivosCriticos.push('Múltiplas comunicações processuais como parte passiva (réu/executado)');}
 
-  if(!dd2MidiaFalhou&&dd2MidiaData.length>0)score=Math.min(100,score+25);
+  // ── Mídia negativa e Diários Oficiais (este último não entrava no score) ──
+  if(!dd2MidiaFalhou&&dd2MidiaData.length>0)soma(dd2MidiaData.length>=3?25:15,`${dd2MidiaData.length} notícia(s) negativa(s)`);
+  if(dd2DiariosData.length>0)soma(dd2DiariosData.length>=3?15:8,`${dd2DiariosData.length} menção(ões) em diários oficiais`);
 
   score=Math.min(100,score);
   gauge.textContent=score;
-  if(score<25){gauge.className='dd2-gauge-circle low';label.textContent='RISCO BAIXO';label.style.color='#22c55e';}
-  else if(score<60){gauge.className='dd2-gauge-circle medium';label.textContent='RISCO MÉDIO';label.style.color='#f59e0b';}
-  else{gauge.className='dd2-gauge-circle high';label.textContent='RISCO ALTO';label.style.color='#ef4444';}
+  const forcarAlto=critico;
+  if(forcarAlto||score>=60){gauge.className='dd2-gauge-circle high';label.textContent='RISCO ALTO';label.style.color='#ef4444';}
+  else if(score>=25){gauge.className='dd2-gauge-circle medium';label.textContent='RISCO MÉDIO';label.style.color='#f59e0b';}
+  else{gauge.className='dd2-gauge-circle low';label.textContent='RISCO BAIXO';label.style.color='#22c55e';}
+
   const pillars=[
-    {icon:'&#127963;',label:'Cadastral',cls:(!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'))?'ok':'bad',txt:null},
-    {icon:'&#9878;',label:'Judicial',cls:judTotal===0?'ok':'bad',txt:null},
+    ...(tipo==='cnpj'?[{icon:'&#127963;',label:'Cadastral',cls:!d?'warn':(situacaoRegular?'ok':'bad'),txt:!d?'Não verificado':null}]:[]),
+    {icon:'&#9878;',label:'Judicial',cls:(judPassivo+judAmbiguo)===0?'ok':'bad',txt:null},
     {icon:'&#128171;',label:'Sanções',cls:sancoesFalhouTudo?'warn':(sanTotal===0?'ok':'bad'),txt:sancoesFalhouTudo?'Não verificado':null},
     {icon:'&#127963;',label:'PEP',cls:dd2PepFalhou?'warn':(dd2PepData.length===0?'ok':'bad'),txt:dd2PepFalhou?'Não verificado':null},
-    {icon:'&#128240;',label:'Mídia',cls:dd2MidiaFalhou?'warn':(dd2MidiaData.length===0?'ok':'bad'),txt:dd2MidiaFalhou?'Não verificado':null}
+    {icon:'&#128240;',label:'Mídia',cls:dd2MidiaFalhou?'warn':(dd2MidiaData.length===0?'ok':'bad'),txt:dd2MidiaFalhou?'Não verificado':null},
+    {icon:'&#128220;',label:'Diários',cls:dd2DiariosData.length===0?'ok':'bad',txt:null},
   ];
   pillarsEl.innerHTML=pillars.map(p=>`<div class="dd2-pillar">
     <div class="dd2-pillar-icon">${p.icon}</div>
     <div class="dd2-pillar-label">${p.label}</div>
     <div class="dd2-pillar-status ${p.cls}">${p.txt||(p.cls==='ok'?'OK':'Atenção')}</div>
   </div>`).join('');
+
+  if(breakdownEl){
+    const avisoCritico=forcarAlto&&motivosCriticos.length?`<div class="dd2-score-critico">🚨 Risco alto forçado independente da pontuação: ${motivosCriticos.map(escapeHtml).join(' · ')}</div>`:'';
+    const linhas=pts.length?pts.map(p=>`<div class="dd2-score-breakdown-item"><span>${escapeHtml(p.label)}</span><span class="dd2-score-breakdown-pts">+${p.valor}</span></div>`).join(''):'<div class="dd2-score-breakdown-item" style="color:#94a3b8">Nenhum fator de risco identificado nas bases verificadas.</div>';
+    breakdownEl.innerHTML=avisoCritico+linhas;
+  }
 }
 
 function dd2RenderTimeline(){
@@ -1445,20 +1550,30 @@ function dd2RenderTimeline(){
 
 function dd2RenderChecklist(){
   const el=document.getElementById('dd2-checklist-content');
+  const tipo=document.getElementById('dd2-tipo').value;
   const d=dd2CadastralData;
   const sit=d?.situacao||'';
   const sanTotal=dd2SanTotal(dd2SancoesData);
   const sancoesFalhouTudo=!!(dd2SancoesData?.semDocumento||(dd2SancoesData?.ceisFalhou&&dd2SancoesData?.cnepFalhou));
+  let judPassivo=0,judAmbiguo=0;
+  dd2JudicialData.forEach(item=>{
+    const polo=dd2JudicialPoloAlvo(item,dd2JudicialNomesAlvo);
+    if(polo==='P')judPassivo++;else if(polo!=='A')judAmbiguo++;
+  });
+  const judRisco=judPassivo+judAmbiguo;
   const items=[
-    {state:d?'ok':'bad',label:'Dados cadastrais obtidos',icon:'&#127963;'},
-    {state:(!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'))?'ok':'bad',label:'Situação cadastral regular',icon:'&#128188;'},
-    {state:dd2JudicialData.length===0?'ok':'bad',label:dd2JudicialData.length?`${dd2JudicialData.length} comunicação(ões) processual(is) encontrada(s) no DJEN`:'Sem comunicações processuais no DJEN',icon:'&#9878;'},
+    // Cadastral só existe pra CNPJ — pra CPF não há "situação"/abertura na Receita.
+    ...(tipo==='cnpj'?[
+      {state:d?'ok':'bad',label:'Dados cadastrais obtidos',icon:'&#127963;'},
+      {state:(!sit||sit.toUpperCase().includes('ATIVA')||sit.toUpperCase().includes('REGULAR'))?'ok':'bad',label:'Situação cadastral regular',icon:'&#128188;'},
+    ]:[]),
+    {state:judRisco===0?'ok':'bad',label:dd2JudicialData.length?`${dd2JudicialData.length} comunicação(ões) no DJEN — ${judPassivo} como réu/executado, ${judAmbiguo} sem polo identificado`:'Sem comunicações processuais no DJEN',icon:'&#9878;'},
     {state:sancoesFalhouTudo?'warn':(sanTotal===0?'ok':'bad'),label:sancoesFalhouTudo?'Não foi possível verificar sanções/restrições':(sanTotal?`${sanTotal} sanção(ões)/restrição(ões) encontrada(s)`:'Sem sanções ou restrições'),icon:'&#128171;'},
     {state:dd2PepFalhou?'warn':(dd2PepData.length===0?'ok':'bad'),label:dd2PepFalhou?'Não foi possível verificar PEP':'Sem registro PEP',icon:'&#127963;'},
     {state:dd2MidiaFalhou?'warn':(dd2MidiaData.length===0?'ok':'bad'),label:dd2MidiaFalhou?'Não foi possível verificar mídia negativa automaticamente':'Sem notícias negativas',icon:'&#128240;'},
     {state:dd2DiariosData.length===0?'ok':'bad',label:dd2DiariosData.length?`${dd2DiariosData.length} menção(ões) em diários oficiais municipais`:'Sem menções em diários oficiais municipais',icon:'&#128240;'}
   ];
-  if(document.getElementById('dd2-tipo').value==='cpf'){
+  if(tipo==='cpf'){
     items.push({state:dd2BolsaData.length===0?'ok':'bad',label:dd2BolsaData.length?`Recebe Bolsa Família (${dd2BolsaData.length} parcela(s))`:'Não recebe Bolsa Família',icon:'&#128176;'});
   }
   el.innerHTML=items.map(i=>`<div class="dd2-chk-item ${i.state}">
