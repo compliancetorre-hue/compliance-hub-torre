@@ -784,34 +784,70 @@ async function dd2FetchBolsaFamilia(cpf){
   // descobertas ao vivo (nenhuma está no contrato OpenAPI):
   // 1. Mês é OBRIGATÓRIO: sem ele volta 400 "Informe ano e mês de
   //    competência ou de referência.";
-  // 2. Mês ALÉM do horizonte de carga da base (o site mostra "Dados
-  //    atualizados até MM/AAAA") não volta vazio — volta 400 genérico
-  //    "Erro ao executar a consulta". Por isso a sonda pra descobrir qual
-  //    parâmetro de mês funciona usa um mês RECUADO (2 antes do fim do
-  //    período), e falha só nos meses mais recentes é tratada como
-  //    horizonte de dados (esperada), não como resultado incompleto.
+  // 2. Mês SEM parcela do NIS não devolve [] — devolve 400 genérico
+  //    {"Erro na API":"Erro ao executar a consulta"} (confirmado ao vivo:
+  //    NIS que o site mostra com parcela em 06/2026 recebe esse erro em
+  //    05/2026 e 07/2026). Ou seja: pra esse endpoint, esse erro específico
+  //    É a resposta de "nada nesse mês" — tratamos como lista vazia, não
+  //    como falha. Falha real (401/429/timeout) continua sendo falha.
   let novasItems=[];let novasParcialFalhou=false;let novasTotalFalhou=false;
   if(nis){
     const marcaNovo=d=>d.map(item=>({...item,_novo:true}));
-    const mesSonda=meses.length>=3?meses[meses.length-3]:meses[0];
-    let paramMesOk=null;
-    for(const paramMes of ['anoMesCompetencia','anoMesReferencia']){
-      try{ await chamar('bolsa-familia-novo','nis='+nis+'&'+paramMes+'='+mesSonda+'&pagina=1'); paramMesOk=paramMes; break; }
-      catch(eProbe){ /* tenta a próxima variante */ }
+    let respostas200=0; // meses que responderam 200 de verdade
+    const chamarNovo=(params)=>fetch(dd2PortalUrl('bolsa-familia-novo',params),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(async r=>{
+      if(!r.ok){
+        const corpo=await r.text().catch(()=>'');
+        if(r.status===400&&corpo.includes('Erro ao executar a consulta'))return [];
+        console.warn('[DD2-DEBUG] bolsa-familia-novo',params,'status:',r.status,'corpo:',corpo);
+        throw new Error('HTTP '+r.status);
+      }
+      respostas200++;
+      return r.json();
+    }).then(d=>Array.isArray(d)?d:[]);
+    const varrer=async(paramMes)=>{
+      const fns=meses.map(anoMes=>()=>chamarNovo('nis='+nis+'&'+paramMes+'='+anoMes+'&pagina=1'));
+      const res=await dd2ExecutarComRetry(fns);
+      return{
+        itens:res.filter(r=>r.status==='fulfilled').flatMap(r=>r.value),
+        falhas:res.filter(r=>r.status==='rejected').length,
+      };
+    };
+    // O site rotula a parcela por "Referência Mês" — tenta referência
+    // primeiro; se não achar nada, repete com competência (só custa a
+    // segunda varredura quando a primeira veio vazia).
+    let v=await varrer('anoMesReferencia');
+    if(!v.itens.length&&v.falhas<meses.length){
+      const v2=await varrer('anoMesCompetencia');
+      if(v2.itens.length||v2.falhas<v.falhas)v=v2;
     }
-    if(paramMesOk){
-      const fns=meses.map(anoMes=>()=>chamar('bolsa-familia-novo','nis='+nis+'&'+paramMesOk+'='+anoMes+'&pagina=1'));
-      const resNovas=await dd2ExecutarComRetry(fns);
-      const idxFalhas=resNovas.map((r,i)=>r.status==='rejected'?i:-1).filter(i=>i>=0);
-      const ok=resNovas.filter(r=>r.status==='fulfilled');
-      novasItems=marcaNovo(ok.flatMap(r=>r.value));
-      // meses em ordem crescente — falha restrita aos 2 últimos (mais
-      // recentes), com o resto ok, é só o horizonte de carga da base.
-      const soHorizonte=idxFalhas.length>0&&ok.length>0&&idxFalhas.every(i=>i>=meses.length-2);
-      novasParcialFalhou=idxFalhas.length>0&&!soHorizonte;
-    } else {
-      novasTotalFalhou=true;
-    }
+    novasItems=marcaNovo(v.itens);
+    novasTotalFalhou=v.falhas>=meses.length;
+    // Sem nenhum 200 de verdade e sem item, não dá pra jurar que "erro ==
+    // sem parcela" valeu pra todos os meses — mantém o aviso de possível
+    // incompletude em vez de um verde categórico.
+    novasParcialFalhou=!novasTotalFalhou&&(v.falhas>0||(!novasItems.length&&respostas200===0));
+  }
+
+  // ── Auxílio Brasil (11/2021 a 03/2023) — é o mesmo programa, renomeado
+  // nesse intervalo (entre o Bolsa Família antigo e o Novo). O endpoint
+  // individual dele FUNCIONA (testado ao vivo com anoMesCompetencia, mesmo
+  // NIS). Só consulta os meses do período selecionado que caem na vigência
+  // do programa — pro período padrão (recente) são zero chamadas extras.
+  let abItems=[];let abParcialFalhou=false;
+  const mesesAB=meses.filter(m=>String(m)>='202111'&&String(m)<='202303');
+  if(nis&&mesesAB.length){
+    const chamarAB=(params)=>fetch(dd2PortalUrl('auxilio-brasil',params),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)}).then(async r=>{
+      if(!r.ok){
+        const corpo=await r.text().catch(()=>'');
+        if(r.status===400&&corpo.includes('Erro ao executar a consulta'))return [];
+        console.warn('[DD2-DEBUG] auxilio-brasil',params,'status:',r.status,'corpo:',corpo);
+        throw new Error('HTTP '+r.status);
+      }
+      return r.json();
+    }).then(d=>Array.isArray(d)?d:[]);
+    const resAB=await dd2ExecutarComRetry(mesesAB.map(anoMes=>()=>chamarAB('nis='+nis+'&anoMesCompetencia='+anoMes+'&pagina=1')));
+    abItems=resAB.filter(r=>r.status==='fulfilled').flatMap(r=>r.value).map(item=>({...item,_ab:true}));
+    abParcialFalhou=resAB.some(r=>r.status==='rejected');
   }
 
   // Zero sucesso nas DUAS bases é falha de verdade — antes só disparava
@@ -820,9 +856,10 @@ async function dd2FetchBolsaFamilia(cpf){
   if(okAntigas.length===0 && meses.length>0 && (!nis||novasTotalFalhou)) throw new Error('Todas as consultas de Bolsa Família falharam');
 
   return {
-    items:[...okAntigas.flatMap(r=>r.value), ...novasItems],
+    items:[...okAntigas.flatMap(r=>r.value), ...abItems, ...novasItems],
     baseAntigaFalhou:antigasParcialFalhou,
     baseNovaFalhou:novasParcialFalhou||novasTotalFalhou,
+    auxilioBrasilFalhou:abParcialFalhou,
     nisNaoEncontrado:!nis&&!nisFalhou,
     nisFalhouAoConsultar:nisFalhou,
     nis,
@@ -1553,7 +1590,7 @@ function dd2RenderBolsaFamilia(res){
     el.innerHTML=`<p style="color:#ef4444;margin-bottom:10px">⚠️ Não foi possível consultar o Bolsa Família automaticamente no momento.</p>${dd2LinkManualBolsa()}`;
     return;
   }
-  const {items:data, baseAntigaFalhou, baseNovaFalhou, nisNaoEncontrado, nisFalhouAoConsultar, nis}=res;
+  const {items:data, baseAntigaFalhou, baseNovaFalhou, auxilioBrasilFalhou, nisNaoEncontrado, nisFalhouAoConsultar, nis}=res;
   let avisos='';
   // O NIS resolvido é ouro pra conferência manual — o site do Portal filtra
   // por NIS, então com ele em mãos a checagem é um copiar-e-colar.
@@ -1562,13 +1599,14 @@ function dd2RenderBolsaFamilia(res){
   if(nisFalhouAoConsultar) avisos+='<p style="color:#ef4444;font-size:.82rem;margin-bottom:6px">⚠️ A consulta pra resolver o NIS desta pessoa falhou (não é "sem NIS cadastrado" — a chamada em si deu erro, possivelmente chave/token ou limite de requisições) — a base do Novo Bolsa Família não foi verificada. Tente novamente.</p>';
   else if(nisNaoEncontrado) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Não foi encontrado NIS cadastrado pra este CPF — a base do Novo Bolsa Família (atual) não foi consultada. Confira manualmente.</p>';
   else if(baseNovaFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais consultas à base do Novo Bolsa Família (atual) falharam — resultado pode estar incompleto (possível limite de requisições).</p>';
+  if(auxilioBrasilFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais consultas à base do Auxílio Brasil (2021-2023) falharam — resultado pode estar incompleto.</p>';
   if(!data.length){el.innerHTML=`${avisos}<p style="color:#22c55e;font-weight:600;margin-bottom:10px">✅ Nenhuma parcela de Bolsa Família encontrada para este CPF.</p>${dd2LinkManualBolsa()}`;return;}
   el.innerHTML=`${avisos}<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Programa</th><th>Mês Referência</th><th>UF</th><th>Município</th><th>NIS</th><th>Beneficiário</th><th>Valor</th></tr></thead>
   <tbody>${data.slice(0,50).map(p=>{
-    const titular=p.titularBolsaFamilia||p.beneficiarioNovoBolsaFamilia;
+    const titular=p.titularBolsaFamilia||p.beneficiarioNovoBolsaFamilia||p.beneficiarioAuxilioBrasil;
     const valor=p.valor!=null?p.valor:p.valorSaque;
     return `<tr>
-    <td><span class="dd2-badge ${p._novo?'info':'warn'}">${p._novo?'Novo Bolsa Família':'Bolsa Família (antigo)'}</span></td>
+    <td><span class="dd2-badge ${p._novo?'info':'warn'}">${p._ab?'Auxílio Brasil (2021-23)':p._novo?'Novo Bolsa Família':'Bolsa Família (antigo)'}</span></td>
     <td>${escapeHtml(p.dataMesReferencia||p.dataMesCompetencia)||'—'}</td>
     <td>${escapeHtml(p.municipio?.uf?.sigla)||'—'}</td>
     <td>${escapeHtml(p.municipio?.nomeIBGE)||'—'}</td>
