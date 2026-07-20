@@ -513,7 +513,36 @@ async function usersSave() {
       if(r.ok) console.log('[usersSave] Supabase OK —', extras.length, 'usuario(s)');
       else console.warn('[usersSave] Supabase status:', r.status);
     } catch(e) { console.warn('[usersSave] REST erro:', e.message); }
+
+    // 3. Sincronizar com a tabela real "usuarios" — é ela que a Edge
+    // Function consulta na rota /login. Antes disso, um usuário criado
+    // aqui só existia em settings.usuarios_extras: aparecia na lista e
+    // passava na checagem local, mas o servidor nunca achava o registro
+    // e negava a entrada com "Usuário não encontrado". Isso também
+    // corrige retroativamente qualquer usuário criado antes desse fix.
+    await usersSyncTabelaReal(extras);
   }
+}
+
+async function usersSyncTabelaReal(extras) {
+  try {
+    const reais = await sbGet('usuarios', '');
+    const porEmail = new Map((Array.isArray(reais)?reais:[]).map(r => [r.email, r]));
+    for(const u of extras) {
+      const existente = porEmail.get(u.email);
+      const row = { nome: u.nome, email: u.email, perfil: u.perfil, senha_hash: u.hash, ativo: true, tentativas_login: 0, bloqueado_ate: null };
+      if(existente?.id) row.id = existente.id;
+      try { await sbUpsert('usuarios', row); }
+      catch(e) { console.warn('[usersSyncTabelaReal] Falha ao sincronizar', u.email, '—', e.message); }
+    }
+    const emailsAtuais = new Set(extras.map(u => u.email));
+    for(const r of (Array.isArray(reais)?reais:[])) {
+      if(r.email !== ADMIN_EMAIL && !emailsAtuais.has(r.email) && r.id) {
+        try { await sbDelete('usuarios', r.id); }
+        catch(e) { console.warn('[usersSyncTabelaReal] Falha ao excluir', r.email, '—', e.message); }
+      }
+    }
+  } catch(e) { console.warn('[usersSyncTabelaReal] Falha geral:', e.message); }
 }
 
 function abrirGerenciarUsuarios() {
