@@ -533,9 +533,13 @@ async function usersSyncTabelaReal(extras) {
     // dá erro "Cannot insert a non-DEFAULT value into column id" (verificado
     // em produção). Só inclui id quando for update de um registro que já
     // existe; na criação, deixa o banco gerar.
+    // Colunas reais da tabela (conferidas direto no Table Editor do
+    // Supabase): id, email, nome, perfil, hash, avatar, cor — nada de
+    // senha_hash/ativo/tentativas_login/filial_id, que vieram de um schema
+    // desatualizado (backend antigo, não usado em produção).
     for(const u of extras) {
       const existente = porEmail.get(u.email);
-      const row = { nome: u.nome, email: u.email, perfil: u.perfil, senha_hash: u.hash, ativo: true, tentativas_login: 0, bloqueado_ate: null };
+      const row = { nome: u.nome, email: u.email, perfil: u.perfil, hash: u.hash, avatar: u.avatar, cor: u.cor };
       if(existente?.id != null) row.id = existente.id;
       try { await sbUpsert('usuarios', row); }
       catch(e) { console.warn('[usersSyncTabelaReal] Falha ao sincronizar', u.email, '—', e.message); }
