@@ -535,11 +535,15 @@ async function usersSyncTabelaReal(extras) {
     // existe; na criação, deixa o banco gerar.
     // Colunas reais da tabela (conferidas direto no Table Editor do
     // Supabase): id, email, nome, perfil, hash, avatar, cor — nada de
-    // senha_hash/ativo/tentativas_login/filial_id, que vieram de um schema
-    // desatualizado (backend antigo, não usado em produção).
+    // ativo/tentativas_login/filial_id, que vieram de um schema
+    // desatualizado (backend antigo, não usado em produção). A tabela TEM
+    // uma coluna extra "senha_hash", redundante com "hash" — e é ela que a
+    // rota /login da Edge Function realmente compara (confirmado testando
+    // ao vivo: só preencher "hash" dá "Senha incorreta"). Preenche as duas
+    // pra cobrir os dois casos.
     for(const u of extras) {
       const existente = porEmail.get(u.email);
-      const row = { nome: u.nome, email: u.email, perfil: u.perfil, hash: u.hash, avatar: u.avatar, cor: u.cor };
+      const row = { nome: u.nome, email: u.email, perfil: u.perfil, hash: u.hash, senha_hash: u.hash, avatar: u.avatar, cor: u.cor };
       if(existente?.id != null) row.id = existente.id;
       try { await sbUpsert('usuarios', row); }
       catch(e) { console.warn('[usersSyncTabelaReal] Falha ao sincronizar', u.email, '—', e.message); }
