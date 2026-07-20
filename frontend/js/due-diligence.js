@@ -13,7 +13,7 @@ const JUNTAS_SLUG={AC:'acre-ac',AL:'alagoas-al-alagoas-al-1',AM:'amazonas-am',AP
 const JUNTAS_NOME={AC:'JUCEAC',AL:'JUCEAL',AM:'JUCEA',AP:'JUCAP',BA:'JUCEB',CE:'JUCEC',DF:'JUCIS-DF',ES:'JUCEES',GO:'JUCEG',MA:'JUCEMA',MG:'JUCEMG',MS:'JUCEMS',MT:'JUCEMAT',PA:'JUCEPA',PB:'JUCEP',PE:'JUCEPE',PI:'JUCEPI',PR:'JUCEPAR',RJ:'JUCERJA',RN:'JUCERN',RO:'JUCER',RR:'JUCERR',RS:'JUCIS-RS',SC:'JUCESC',SE:'JUCESE',SP:'JUCESP',TO:'JUCETINS'};
 const JUNTAS={};
 Object.keys(JUNTAS_SLUG).forEach(uf=>{JUNTAS[uf]={n:JUNTAS_NOME[uf],u:`https://www.gov.br/empresas-e-negocios/pt-br/drei/juntas-comerciais/${JUNTAS_SLUG[uf]}`};});
-  
+
 // ── MASKS ─────────────────────────────────
 function ddMC(v){v=v.replace(/\D/g,'');v=v.replace(/^(\d{2})(\d)/,'$1.$2');v=v.replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3');v=v.replace(/\.(\d{3})(\d)/,'.$1/$2');v=v.replace(/(\d{4})(\d)/,'$1-$2');return v.substr(0,18);}
 function ddMCpf(v){v=v.replace(/\D/g,'');v=v.replace(/(\d{3})(\d)/,'$1.$2');v=v.replace(/(\d{3})(\d)/,'$1.$2');v=v.replace(/(\d{3})(\d{1,2})$/,'$1-$2');return v.substr(0,14);}
@@ -59,6 +59,18 @@ function buildBooleanQuery(alvo, doc, alt){
     pep: `${base} AND ("cargo público" OR "servidor público" OR governador OR senador OR deputado OR prefeito OR secretário OR ministro OR "Pessoa Politicamente Exposta" OR PEP OR "partido político")`,
     recente: `${base}${docStr} after:${new Date(Date.now()-365*24*60*60*1000).toISOString().split('T')[0]}`,
   };
+}
+
+// Nome "curto" pra busca em rede social: primeiro + último nome, pulando
+// conectivos. Nome civil completo entre aspas ("Bruno Felipe Lima
+// Magalhães") quase nunca existe literalmente num perfil — a pessoa se
+// apresenta como "Bruno Magalhães" — então a busca exata com o nome
+// inteiro devolve zero mesmo quando o perfil existe.
+function ddNomeCurto(nome){
+  const conectivos=new Set(['da','de','do','das','dos','e']);
+  const t=(nome||'').trim().split(/\s+/).filter(p=>!conectivos.has(p.toLowerCase()));
+  if(t.length<=2)return nome.trim();
+  return t[0]+' '+t[t.length-1];
 }
 
 // ── LINK HTML + VERIFICAÇÃO AUTOMÁTICA ────
@@ -319,12 +331,13 @@ function pjBuildGrupos(razao,fantasia,cnpjNum,cnpjFmt,endStr,socios,uf){
       ]:[{label:'Preencha o endereço para ativar Street View',url:'#',query:'',p:'a',disabled:true}]),
     ]},
     {title:'🌐 Redes sociais',items:[
-      {...ddG(`"${RL}" site:instagram.com`),label:'Instagram — razão social exata',p:'a'},
-      {...ddG(`"${FT}" site:instagram.com`),label:'Instagram — nome fantasia exato',p:'a'},
-      {...ddG(`"${RL}" site:facebook.com`),label:'Facebook — empresa exata',p:'a'},
-      {...ddG(`"${RL}" site:linkedin.com`),label:'LinkedIn — empresa exata',p:'a'},
+      {...ddA(`https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(FT)}`,FT),label:'Instagram — busca interna da rede (requer login)',p:'a'},
+      {...ddA(`https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(FT)}`,FT),label:'LinkedIn — busca interna de empresas',p:'a'},
+      {...ddG(`"${FT}" site:instagram.com OR site:facebook.com`),label:'Instagram/Facebook via Google — nome fantasia (como a empresa se apresenta)',p:'a'},
+      {...ddG(`"${RL}" site:linkedin.com OR site:instagram.com OR site:facebook.com`),label:'Redes via Google — razão social exata',p:'a'},
       {...ddG(`"${FT}".com.br OR "${FT}".com`),label:'Site oficial — domínio exato',p:'g'},
-      {...ddG(`"${RL}" aposta OR bet OR cassino OR rifa OR "jogo online"`),label:'🚨 ALERTA PLD — apostas / bets',p:'r',isMidia:true},
+      {...ddG(`"${FT}" aposta OR bet OR cassino OR rifa OR "jogo online"`),label:'🚨 ALERTA PLD — apostas / bets (nome fantasia)',p:'r',isMidia:true},
+      {...ddG(`"${RL}" aposta OR bet OR cassino OR rifa OR "jogo online"`),label:'🚨 ALERTA PLD — apostas / bets (razão social)',p:'r',isMidia:true},
     ]},
     {title:'⭐ Reputação',items:[
       {...ddA(`https://www.reclameaqui.com.br/busca/?q=${encodeURIComponent('"'+FT+'"')}`,`"${FT}"`),label:'Reclame Aqui — nome fantasia exato',p:'r'},
@@ -347,7 +360,7 @@ function pjBuildGrupos(razao,fantasia,cnpjNum,cnpjFmt,endStr,socios,uf){
         {...ddG(buildBooleanQuery(s,'').criminal),label:`Boolean mídias negativas — sócio "${s}"`,p:'r',isMidia:true},
         {...ddA(`https://www.jusbrasil.com.br/consulta-processual/?q=${encodeURIComponent(s)}`,s),label:`JusBrasil — processos de "${s}"`,p:'r'},
         {...ddG(`"${s}" "${RL}"`),label:`Google — "${s}" + empresa exata`,p:'a'},
-        {...ddG(`"${s}" site:linkedin.com`),label:`LinkedIn — "${s}"`,p:'a'},
+        {...ddA(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(s)}`,s),label:`LinkedIn — busca interna: "${ddNomeCurto(s)}"`,p:'a'},
       ]),
       ...(sArr.length===0?[{label:'Preencha o campo sócios',url:'#',query:'',p:'a',disabled:true}]:[]),
     ]},
@@ -424,12 +437,16 @@ function pfBuildGrupos(nome,cpf,cpfFmt,end,empresa,pep){
       {...ddA(`https://www.google.com/maps/search/${endQ}`,end),label:'Google Maps — localização',p:'a'},
       {...ddG(`"${nome}" "${end}"`),label:'Google — nome + endereço exatos',p:'a'},
     ]}]:[]),
-    {title:'🌐 Redes sociais',items:[
-      {...ddG(`"${nome}" site:instagram.com`),label:'Instagram — nome exato',p:'a'},
-      {...ddG(`"${nome}" site:facebook.com`),label:'Facebook — nome exato',p:'a'},
-      {...ddG(`"${nome}" site:linkedin.com`),label:'LinkedIn — perfil exato',p:'a'},
-      {...ddG(`"${nome}" aposta OR bet OR cassino OR rifa`),label:'🚨 ALERTA PLD — apostas/bets',p:'r',isMidia:true},
-    ]},
+    {title:'🌐 Redes sociais',items:(()=>{
+      const nomeCurto=ddNomeCurto(nome);
+      return[
+      {...ddA(`https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(nomeCurto)}`,nomeCurto),label:'Instagram — busca interna da rede (melhor cobertura; requer login)',p:'a'},
+      {...ddA(`https://www.facebook.com/search/people/?q=${encodeURIComponent(nomeCurto)}`,nomeCurto),label:'Facebook — busca interna de pessoas (requer login)',p:'a'},
+      {...ddA(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(nome)}`,nome),label:'LinkedIn — busca interna de pessoas',p:'a'},
+      {...ddG(`"${nomeCurto}" site:instagram.com OR site:facebook.com OR site:linkedin.com`),label:`Redes via Google — "${nomeCurto}" (nome curto: nome completo raramente existe em perfil)`,p:'a'},
+      {...ddG(`"${nome}" aposta OR bet OR cassino OR rifa`),label:'🚨 ALERTA PLD — apostas/bets (nome completo)',p:'r',isMidia:true},
+      {...ddG(`"${nomeCurto}" aposta OR bet OR cassino OR rifa`),label:`🚨 ALERTA PLD — apostas/bets ("${nomeCurto}")`,p:'r',isMidia:true},
+      ];})()},
     ...(empresa?[{title:'🏢 Empresa(s) vinculada(s)',items:[
       {...ddG(`"${nome}" "${empresa}"`),label:`Google — "${nome}" + empresa vinculada`,p:'a'},
       {...ddA(`https://www.jusbrasil.com.br/consulta-processual/?q=${encodeURIComponent(empresa)}`,empresa),label:`JusBrasil — processos da empresa "${empresa}"`,p:'a'},
