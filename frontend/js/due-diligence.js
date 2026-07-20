@@ -61,24 +61,122 @@ function buildBooleanQuery(alvo, doc, alt){
   };
 }
 
-// ── LINK HTML ─────────────────────────────
-// Cada link abre o Google/site oficial pra checagem manual. A verificação
-// automática que existia aqui usava a API de "respostas instantâneas" do
-// DuckDuckGo (api.duckduckgo.com/?format=json) — que NÃO é um motor de
-// busca, é uma API de resumo tipo Wikipédia/calculadora, com cobertura
-// mínima. Pra nome de empresa/pessoa comum ela quase sempre voltava vazia,
-// marcando "➖ Sem resultados" mesmo quando o Google real tinha resultado —
-// um gerador de falso-negativo numa ferramenta de compliance. Removida.
+// ── LINK HTML + VERIFICAÇÃO AUTOMÁTICA ────
+// A antiga "verificação automática" daqui usava a API de respostas
+// instantâneas do DuckDuckGo — que não é motor de busca e gerava falso
+// negativo em série; foi removida. O que existe agora é diferente e
+// honesto: pros links cuja FONTE tem API pública de verdade (CEIS, CNEP,
+// Leniência, CEPIM, CEAF, PEP, TCU, DJEN, DOU, Querido Diário, sanções
+// internacionais, Google Notícias via RSS), a consulta REAL é feita na
+// própria fonte e o link ganha um selo "✅ nada encontrado" / "🔴 N
+// resultado(s)". O que é barrado por CAPTCHA/bot-protection (Google web,
+// Reclame Aqui, JusBrasil, Lista Suja, juntas...) fica com selo "manual" —
+// sem fingir verificação. Os motores são os mesmos do Due Diligence 2
+// (due-diligence2.js, carregado na mesma página).
+let ddVfSeq=0;let ddVfFila=[];
+
+const DD_VCHIP_BASE='font-size:.66rem;font-weight:700;padding:2px 7px;border-radius:4px;flex-shrink:0;white-space:nowrap';
+
 function ddLiHTML(item){
   if(item.disabled)return`<div class="dd-li disabled"><span class="dd-lb lb-${item.p||'g'}">${item.p==='r'?'CRÍTICO':item.p==='a'?'ATENÇÃO':'BASE'}</span><div class="dd-li-main"><div class="dd-li-lbl">${item.label}</div></div></div>`;
   const lbCls=item.isMidia?'lb-neg':(item.p==='r'?'lb-r':item.p==='a'?'lb-a':'lb-g');
   const lbTxt=item.isMidia?'MÍDIA NEG.':(item.p==='r'?'CRÍTICO':item.p==='a'?'ATENÇÃO':'BASE');
   const qchip=item.query?`<span class="dd-li-q" title="${item.query.replace(/"/g,"'")}">${item.query.length>68?item.query.substr(0,68)+'…':item.query}</span>`:'';
+  let vchip;
+  if(item.v){
+    const id='dd-vf-'+(++ddVfSeq);
+    ddVfFila.push({id,run:item.v});
+    vchip=`<span id="${id}" style="${DD_VCHIP_BASE};background:#f1f5f9;color:#64748b" title="Consultando a fonte oficial automaticamente...">⏳ verificando…</span>`;
+  }else{
+    vchip=`<span style="${DD_VCHIP_BASE};background:#f8fafc;color:#94a3b8" title="Essa fonte não tem API pública (CAPTCHA/bloqueio) — abra o link e confira você mesmo">manual</span>`;
+  }
   return`<a class="dd-li" href="${item.url||'#'}" target="_blank" rel="noopener">
     <span class="dd-lb ${lbCls}">${lbTxt}</span>
     <div class="dd-li-main"><div class="dd-li-lbl">${item.label}</div>${qchip}</div>
+    ${vchip}
     <span style="color:var(--text-muted);font-size:.76rem;flex-shrink:0;margin-left:2px">↗</span>
   </a>`;
+}
+
+// Fábricas de verificadores — cada uma devolve uma função async que retorna
+// a QUANTIDADE de registros achados na fonte. Todas reutilizam os motores
+// do due-diligence2.js; se ele não estiver carregado, o selo vira "não
+// verificado" em vez de quebrar a página.
+function ddVfPortal(rota,params){return async()=>{
+  if(typeof dd2PortalUrl!=='function')throw new Error('motor indisponível');
+  const r=await fetch(dd2PortalUrl(rota,params+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(12000)});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const d=await r.json();
+  return Array.isArray(d)?d.length:0;
+};}
+function ddVfGNews(q){return async()=>{
+  if(typeof dd2FetchGoogleNewsRSS!=='function')throw new Error('motor indisponível');
+  return (await dd2FetchGoogleNewsRSS(q)).length;
+};}
+function ddVfDou(q){return async()=>{
+  if(typeof dd2FetchDOU!=='function')throw new Error('motor indisponível');
+  return (await dd2FetchDOU(q)).length;
+};}
+function ddVfQD(q){return async()=>{
+  if(typeof dd2FetchQueridoDiario!=='function')throw new Error('motor indisponível');
+  return (await dd2FetchQueridoDiario(q)).length;
+};}
+function ddVfDjen(nome,docFmt){return async()=>{
+  if(typeof dd2FetchDJEN!=='function')throw new Error('motor indisponível');
+  const buscas=[];
+  if(docFmt)buscas.push(dd2FetchDJEN({texto:docFmt}));
+  if(nome)buscas.push(dd2FetchDJEN({nomeParte:nome}));
+  if(!buscas.length)return 0;
+  const rs=await Promise.allSettled(buscas);
+  const ok=rs.filter(r=>r.status==='fulfilled');
+  if(!ok.length)throw new Error('DJEN indisponível');
+  const ids=new Set();
+  ok.forEach(r=>r.value.forEach(i=>ids.add(i.id)));
+  return ids.size;
+};}
+function ddVfTcu(docNum,nome){return async()=>{
+  if(typeof dd2FetchTCUInidoneos!=='function')throw new Error('motor indisponível');
+  const items=await dd2FetchTCUInidoneos();
+  let n=docNum?dd2TcuPorDocumento(items,docNum).length:0;
+  if(nome)n+=dd2TcuPorNome(items,nome).length;
+  return n;
+};}
+function ddVfSanctions(nome){return async()=>{
+  if(typeof dd2FetchSanctionsNetwork!=='function')throw new Error('motor indisponível');
+  return dd2FiltrarRuidoSancoesIntl(await dd2FetchSanctionsNetwork(nome),nome).length;
+};}
+function ddVfPep(nome,cpf){return async()=>{
+  if(typeof dd2FetchPep!=='function')throw new Error('motor indisponível');
+  return (await dd2FetchPep(nome,cpf)).length;
+};}
+
+// Roda a fila em lotes pequenos (concorrência 3 + pausa) pra não estourar
+// os rate limits do Portal/DJEN, atualizando cada selo conforme termina.
+async function ddRodarVerificacoes(){
+  const fila=ddVfFila.splice(0);
+  for(let i=0;i<fila.length;i+=3){
+    await Promise.allSettled(fila.slice(i,i+3).map(async f=>{
+      const el=document.getElementById(f.id);
+      if(!el)return;
+      try{
+        const n=await f.run();
+        if(n>0){
+          el.style.background='#fee2e2';el.style.color='#b91c1c';
+          el.textContent='🔴 '+n+' resultado(s)';
+          el.title='A fonte oficial retornou '+n+' registro(s) pro termo pesquisado — abra o link pra conferir o teor';
+        }else{
+          el.style.background='#dcfce7';el.style.color='#15803d';
+          el.textContent='✅ nada encontrado';
+          el.title='Consulta automática feita na própria fonte — nenhum registro pro termo pesquisado';
+        }
+      }catch(e){
+        el.style.background='#fef3c7';el.style.color='#b45309';
+        el.textContent='⚠️ não verificado';
+        el.title='A consulta automática falhou ('+(e?.message||'erro')+') — confira manualmente no link';
+      }
+    }));
+    if(i+3<fila.length)await new Promise(r=>setTimeout(r,400));
+  }
 }
 
 // ── LOG ───────────────────────────────────
@@ -177,26 +275,30 @@ function pjBuildGrupos(razao,fantasia,cnpjNum,cnpjFmt,endStr,socios,uf){
       {...ddA(`https://www.receitaws.com.br/v1/cnpj/${cnpjNum}`,`GET /v1/cnpj/${cnpjNum}`),label:'ReceitaWS — JSON direto (sem CAPTCHA)',p:'r'},
       {...ddA(`https://brasilapi.com.br/api/cnpj/v1/${cnpjNum}`,`GET /api/cnpj/v1/${cnpjNum}`),label:'BrasilAPI — JSON cadastral',p:'r'},
       {...ddA(`https://casadosdados.com.br/solucao/cnpj/${cnpjNum}`,`CNPJ ${cnpjNum}`),label:'Casa dos Dados — sócios e endereços vinculados',p:'a'},
-      {...ddA(`https://portaldatransparencia.gov.br/sancoes/ceis?termo=${cnpjNum}`,`CNPJ ${cnpjNum}`),label:'CEIS — impedida de contratar com o governo',p:'r'},
-      {...ddA(`https://portaldatransparencia.gov.br/sancoes/cnep?termo=${cnpjNum}`,`CNPJ ${cnpjNum}`),label:'CNEP — punições e sanções',p:'r'},
+      {...ddA(`https://portaldatransparencia.gov.br/sancoes/ceis?termo=${cnpjNum}`,`CNPJ ${cnpjNum}`),label:'CEIS — impedida de contratar com o governo',p:'r',v:ddVfPortal('ceis','codigoSancionado='+cnpjNum)},
+      {...ddA(`https://portaldatransparencia.gov.br/sancoes/cnep?termo=${cnpjNum}`,`CNPJ ${cnpjNum}`),label:'CNEP — punições e sanções',p:'r',v:ddVfPortal('cnep','codigoSancionado='+cnpjNum)},
+      {...ddA(`https://portaldatransparencia.gov.br/sancoes/acordos-leniencia?termo=${cnpjNum}`,`CNPJ ${cnpjNum}`),label:'Acordos de Leniência — CGU',p:'r',v:ddVfPortal('acordos-leniencia','cnpjSancionado='+cnpjNum)},
+      {...ddA(`https://portaldatransparencia.gov.br/sancoes/cepim?termo=${cnpjNum}`,`CNPJ ${cnpjNum}`),label:'CEPIM — impedida de celebrar convênio com a União',p:'r',v:ddVfPortal('cepim','cnpjSancionado='+cnpjNum)},
+      {...ddA('https://portal.tcu.gov.br/responsabilizacao-publica/licitantes-inidoneas/',`CNPJ ${cnpjFmt}`),label:'TCU — licitantes declarados inidôneos',p:'r',v:ddVfTcu(cnpjNum,RL)},
+      {...ddA('https://sanctionssearch.ofac.treas.gov/',`"${RL}"`),label:'Sanções internacionais — OFAC/ONU/UE (agregador)',p:'r',v:ddVfSanctions(RL)},
       {...ddA('https://sit.trabalho.gov.br/radar/','Busca manual'),label:'Lista Suja — trabalho escravo (Radar SIT)',p:'r'},
       {...ddG(`"${cnpjFmt}"`),label:`Google — CNPJ exato "${cnpjFmt}"`,p:'r'},
       {...ddG(`"${RL}" "${cnpjFmt}"`),label:'Google — razão social exata + CNPJ',p:'r'},
     ]},
     {title:'🟣 Mídias negativas — busca booleana (criminal)',items:[
       {...ddG(bool.criminal),label:'Boolean — riscos criminais (corrupção, fraude, lavagem, trabalho escravo)',p:'r',isMidia:true},
-      {...ddGT(bool.criminal),label:'Notícias — riscos criminais (últimos 12 meses)',p:'r',isMidia:true},
+      {...ddGT(bool.criminal),label:'Notícias — riscos criminais (últimos 12 meses)',p:'r',isMidia:true,v:ddVfGNews(bool.criminal)},
       {...ddG(`"${RL}" AND ("lista suja" OR OFAC OR blacklist OR sanção OR "improbidade administrativa")`),label:'Boolean — sanções e listas restritivas',p:'r',isMidia:true},
     ]},
     {title:'🟣 Mídias negativas — financeiro e regulatório',items:[
       {...ddG(bool.financeiro),label:'Boolean — riscos financeiros (fraude, Ponzi, insolvência, evasão)',p:'r',isMidia:true},
-      {...ddGT(bool.financeiro),label:'Notícias — riscos financeiros recentes',p:'r',isMidia:true},
+      {...ddGT(bool.financeiro),label:'Notícias — riscos financeiros recentes',p:'r',isMidia:true,v:ddVfGNews(bool.financeiro)},
       {...ddG(bool.regulatorio),label:'Boolean — riscos regulatórios (MP, CVM, BACEN, cassação)',p:'r',isMidia:true},
       {...ddG(bool.reputacional),label:'Boolean — riscos reputacionais (escândalos, assédio, ambiental)',p:'a',isMidia:true},
     ]},
     {title:'🟣 Mídias negativas — atividade recente (12 meses)',items:[
       {...ddG(bool.recente),label:`Google — "${RL}" · publicações do último ano`,p:'r',isMidia:true},
-      {...ddGT(`"${RL}"`),label:`Google Notícias — "${RL}" ·  qualquer data`,p:'r',isMidia:true},
+      {...ddGT(`"${RL}"`),label:`Google Notícias — "${RL}" ·  qualquer data`,p:'r',isMidia:true,v:ddVfGNews(`"${RL}"`)},
       {...ddG(`"${RL}" OR "${cnpjFmt}" site:g1.globo.com OR site:uol.com.br OR site:folha.uol.com.br OR site:estadao.com.br OR site:valor.com.br`),label:'Grandes veículos — G1, UOL, Folha, Estadão, Valor Econômico',p:'r',isMidia:true},
     ]},
     {title:'🏛️ Junta Comercial'+(uf?` — ${uf}`:''),items:[
@@ -231,11 +333,13 @@ function pjBuildGrupos(razao,fantasia,cnpjNum,cnpjFmt,endStr,socios,uf){
       {...ddG(`"${RL}" "não entregou" OR calote OR golpe OR fraude OR abandonou`),label:`Google — "${RL}" calote / fraude (busca exata)`,p:'r',isMidia:true},
     ]},
     {title:'⚖️ Processos e dívidas',items:[
+      {...ddA(`https://comunica.pje.jus.br/`,`"${RL}" / CNPJ ${cnpjFmt}`),label:'DJEN — citações e intimações em todo o país (CNJ)',p:'r',v:ddVfDjen(RL,cnpjFmt)},
       {...ddA(`https://www.jusbrasil.com.br/consulta-processual/?q=${cnpjNum}`,cnpjNum),label:'JusBrasil — processos por CNPJ',p:'r'},
       {...ddA(`https://www.jusbrasil.com.br/consulta-processual/?q=${encodeURIComponent('"'+RL+'"')}`,`"${RL}"`),label:'JusBrasil — razão social exata',p:'r'},
       ...sArr.slice(0,3).map(s=>({...ddA(`https://www.jusbrasil.com.br/consulta-processual/?q=${encodeURIComponent(s)}`,s),label:`JusBrasil — sócio "${s}"`,p:'a'})),
       {...ddA('https://www.cnj.jus.br/pjecnj/',`CNPJ: ${cnpjFmt}`),label:'CNJ — consulta processual nacional',p:'r'},
-      {...ddA(`https://www.in.gov.br/consulta/-/buscar/dou?q=${encodeURIComponent('"'+RL+'"')}`,`"${RL}"`),label:'Diário Oficial — publicações exatas',p:'a'},
+      {...ddA(`https://www.in.gov.br/consulta/-/buscar/dou?q=${encodeURIComponent('"'+RL+'"')}`,`"${RL}"`),label:'Diário Oficial da União — publicações exatas',p:'a',v:ddVfDou(RL)},
+      {...ddA(`https://queridodiario.ok.org.br/pesquisa?termo=${encodeURIComponent('"'+RL+'"')}`,`"${RL}"`),label:'Querido Diário — diários oficiais de 350+ municípios',p:'a',v:ddVfQD(RL)},
       {...ddG(`"${RL}" "execução fiscal" OR protesto OR "dívida ativa"`),label:`Google — "${RL}" execução fiscal`,p:'a',isMidia:true},
     ]},
     {title:'👤 Sócios',items:[
@@ -251,8 +355,8 @@ function pjBuildGrupos(razao,fantasia,cnpjNum,cnpjFmt,endStr,socios,uf){
       {...ddA(`https://www.bcb.gov.br/estabilidadefinanceira/pesquisainstituicao?nome=${encodeURIComponent(RL)}`,`"${RL}"`),label:'🔴 BACEN — autorização para funcionar como instituição financeira',p:'r'},
       {...ddA(`https://sistemas.cvm.gov.br/port/processos/consultaprocessos.asp`,`CNPJ: ${cnpjNum}`),label:'🔴 CVM — registro para operar no mercado de capitais',p:'r'},
       {...ddA(`https://www.gov.br/pt-br/servicos/consultar-entidades-licenciadas-pela-susep`,`CNPJ: ${cnpjFmt}`),label:'🔴 SUSEP — autorização para operar seguros/previdência',p:'r'},
-      {...ddA(`https://portaldatransparencia.gov.br/sancoes/ceis?termo=${cnpjNum}`,`CNPJ: ${cnpjNum}`),label:'🔴 CEIS — impedida de contratar com o poder público',p:'r'},
-      {...ddA(`https://portaldatransparencia.gov.br/sancoes/cnep?termo=${cnpjNum}`,`CNPJ: ${cnpjNum}`),label:'🔴 CNEP — punições e sanções aplicadas',p:'r'},
+      {...ddA(`https://portaldatransparencia.gov.br/sancoes/ceis?termo=${cnpjNum}`,`CNPJ: ${cnpjNum}`),label:'🔴 CEIS — impedida de contratar com o poder público',p:'r',v:ddVfPortal('ceis','codigoSancionado='+cnpjNum)},
+      {...ddA(`https://portaldatransparencia.gov.br/sancoes/cnep?termo=${cnpjNum}`,`CNPJ: ${cnpjNum}`),label:'🔴 CNEP — punições e sanções aplicadas',p:'r',v:ddVfPortal('cnep','codigoSancionado='+cnpjNum)},
       {...ddA('https://sit.trabalho.gov.br/radar/',`CNPJ: ${cnpjFmt}`),label:'🔴 Lista Suja MTE — trabalho escravo/análogo',p:'r'},
       {...ddA('https://cna.oab.org.br/',`"${RL}"`),label:'OAB — escritório de advocacia',p:'g'},
       {...ddA('https://www3.cfc.org.br/spw/crcs/ConselhoRegionalAtivo.aspx',`CNPJ: ${cnpjFmt}`),label:'CFC/CRC — empresa contábil',p:'g'},
@@ -260,7 +364,7 @@ function pjBuildGrupos(razao,fantasia,cnpjNum,cnpjFmt,endStr,socios,uf){
       {...ddA('https://www.antt.gov.br/',`CNPJ: ${cnpjFmt}`),label:'ANTT — empresa de transporte',p:'g'},
       {...ddA('https://consultas.anvisa.gov.br/#/',`CNPJ: ${cnpjFmt}`),label:'ANVISA — farmácia/alimentos/saúde',p:'g'},
       {...ddA('https://cadastur.turismo.gov.br/',`CNPJ: ${cnpjFmt}`),label:'Cadastur — agência de turismo',p:'g'},
-      {...ddA(`https://www.in.gov.br/consulta/-/buscar/dou?q=${encodeURIComponent('"'+cnpjFmt+'"')}`,`"${cnpjFmt}"`),label:'Diário Oficial — publicações com o CNPJ',p:'a'},
+      {...ddA(`https://www.in.gov.br/consulta/-/buscar/dou?q=${encodeURIComponent('"'+cnpjFmt+'"')}`,`"${cnpjFmt}"`),label:'Diário Oficial — publicações com o CNPJ',p:'a',v:ddVfDou(cnpjFmt)},
     ]},
   ];
 }
@@ -275,8 +379,12 @@ function pfBuildGrupos(nome,cpf,cpfFmt,end,empresa,pep){
       {...ddA('https://servicos.receita.fazenda.gov.br/Servicos/CPF/ConsultaSituacao/ConsultaPublica.asp',`CPF: ${cpfFmt}`),label:'Receita Federal — situação do CPF',p:'r'},
       {...ddG(`"${cpfFmt}"`),label:`Google — CPF exato "${cpfFmt}"`,p:'r'},
       {...ddG(`"${nome}" "${cpfFmt}"`),label:'Google — nome exato + CPF',p:'r'},
-      {...ddA(`https://portaldatransparencia.gov.br/sancoes/ceis?termo=${cpf}`,`CPF: ${cpfFmt}`),label:'CEIS — impedida de contratar com o governo',p:'r'},
-      {...ddA(`https://portaldatransparencia.gov.br/sancoes/cnep?termo=${cpf}`,`CPF: ${cpfFmt}`),label:'CNEP — punições e sanções',p:'r'},
+      {...ddA(`https://portaldatransparencia.gov.br/sancoes/ceis?termo=${cpf||encodeURIComponent(nome)}`,cpf?`CPF: ${cpfFmt}`:`"${nome}"`),label:'CEIS — impedida de contratar com o governo',p:'r',v:ddVfPortal('ceis',cpf?'codigoSancionado='+cpf:'nomeSancionado='+encodeURIComponent(nome))},
+      {...ddA(`https://portaldatransparencia.gov.br/sancoes/cnep?termo=${cpf||encodeURIComponent(nome)}`,cpf?`CPF: ${cpfFmt}`:`"${nome}"`),label:'CNEP — punições e sanções',p:'r',v:ddVfPortal('cnep',cpf?'codigoSancionado='+cpf:'nomeSancionado='+encodeURIComponent(nome))},
+      {...ddA(`https://portaldatransparencia.gov.br/sancoes/ceaf?termo=${cpf||encodeURIComponent(nome)}`,cpf?`CPF: ${cpfFmt}`:`"${nome}"`),label:'CEAF — expulsões da administração federal',p:'r',v:ddVfPortal('ceaf',cpf?'cpfSancionado='+cpf:'nomeSancionado='+encodeURIComponent(nome))},
+      {...ddA('https://portaldatransparencia.gov.br/pessoa-fisica/busca/lista',`"${nome}"`),label:'PEP — base oficial de Pessoas Expostas Politicamente (CGU)',p:'r',v:ddVfPep(nome,cpf)},
+      {...ddA('https://portal.tcu.gov.br/responsabilizacao-publica/licitantes-inidoneas/',`"${nome}"`),label:'TCU — inidôneos (pessoa física também consta)',p:'r',v:ddVfTcu(cpf,nome)},
+      {...ddA('https://sanctionssearch.ofac.treas.gov/',`"${nome}"`),label:'Sanções internacionais — OFAC/ONU/UE (agregador)',p:'r',v:ddVfSanctions(nome)},
       {...ddA('https://sit.trabalho.gov.br/radar/','Busca manual'),label:'Lista Suja — trabalho escravo',p:'r'},
     ]},
     ...(pep!=='nao'?[{title:'🏛️ PEP — Pessoa Politicamente Exposta',items:[
@@ -287,25 +395,28 @@ function pfBuildGrupos(nome,cpf,cpfFmt,end,empresa,pep){
     ]}]:[]),
     {title:'🟣 Mídias negativas — criminal e fraude',items:[
       {...ddG(bool.criminal),label:'Boolean — riscos criminais (corrupção, fraude, lavagem, investigação)',p:'r',isMidia:true},
-      {...ddGT(bool.criminal),label:'Notícias — riscos criminais recentes',p:'r',isMidia:true},
+      {...ddGT(bool.criminal),label:'Notícias — riscos criminais recentes',p:'r',isMidia:true,v:ddVfGNews(bool.criminal)},
       {...ddG(`"${nome}" AND ("lista suja" OR OFAC OR blacklist OR sanção OR "improbidade administrativa")`),label:'Boolean — sanções e listas restritivas',p:'r',isMidia:true},
       {...ddG(`"${cpfFmt}" fraude OR golpe OR estelionato OR crime`),label:`Google — CPF exato em registros negativos`,p:'r',isMidia:true},
     ]},
     {title:'🟣 Mídias negativas — financeiro e reputacional',items:[
       {...ddG(bool.financeiro),label:'Boolean — riscos financeiros (fraude, Ponzi, insolvência)',p:'r',isMidia:true},
-      {...ddGT(bool.financeiro),label:'Notícias financeiras recentes',p:'r',isMidia:true},
+      {...ddGT(bool.financeiro),label:'Notícias financeiras recentes',p:'r',isMidia:true,v:ddVfGNews(bool.financeiro)},
       {...ddG(bool.regulatorio),label:'Boolean — riscos regulatórios (MP, CVM, improbidade)',p:'r',isMidia:true},
       {...ddG(bool.reputacional),label:'Boolean — riscos reputacionais (escândalos, denúncias)',p:'a',isMidia:true},
     ]},
     {title:'🟣 Mídias negativas — publicações recentes',items:[
       {...ddG(bool.recente),label:`Google — "${nome}" · publicações do último ano`,p:'r',isMidia:true},
-      {...ddGT(`"${nome}"`),label:`Google Notícias — "${nome}" qualquer data`,p:'r',isMidia:true},
+      {...ddGT(`"${nome}"`),label:`Google Notícias — "${nome}" qualquer data`,p:'r',isMidia:true,v:ddVfGNews(`"${nome}"`)},
       {...ddG(`"${nome}" site:g1.globo.com OR site:uol.com.br OR site:folha.uol.com.br OR site:estadao.com.br OR site:valor.com.br`),label:'Grandes veículos de jornalismo — G1, Folha, Estadão, Valor',p:'r',isMidia:true},
     ]},
     {title:'⚖️ Processos judiciais',items:[
+      {...ddA(`https://comunica.pje.jus.br/`,`"${nome}"${cpfFmt?' / CPF '+cpfFmt:''}`),label:'DJEN — citações e intimações em todo o país (CNJ)',p:'r',v:ddVfDjen(nome,cpf?cpfFmt:'')},
       {...ddA(`https://www.jusbrasil.com.br/consulta-processual/?q=${encodeURIComponent('"'+nome+'"')}`,`"${nome}"`),label:'JusBrasil — processos pelo nome exato',p:'r'},
       ...(cpf?[{...ddA(`https://www.jusbrasil.com.br/consulta-processual/?q=${cpf}`,cpf),label:'JusBrasil — processos pelo CPF',p:'r'}]:[]),
       {...ddA('https://www.cnj.jus.br/pjecnj/',`Nome: "${nome}"`),label:'CNJ — consulta processual nacional',p:'r'},
+      {...ddA(`https://www.in.gov.br/consulta/-/buscar/dou?q=${encodeURIComponent('"'+nome+'"')}`,`"${nome}"`),label:'Diário Oficial da União — publicações exatas',p:'a',v:ddVfDou(nome)},
+      {...ddA(`https://queridodiario.ok.org.br/pesquisa?termo=${encodeURIComponent('"'+nome+'"')}`,`"${nome}"`),label:'Querido Diário — diários oficiais de 350+ municípios',p:'a',v:ddVfQD(nome)},
       {...ddG(`"${nome}" "execução fiscal" OR protesto OR "dívida ativa" OR inadimplente`),label:`Google — "${nome}" execução fiscal`,p:'a',isMidia:true},
     ]},
     ...(end?[{title:'🏠 Verificação de endereço',items:[
@@ -335,8 +446,8 @@ function pfBuildGrupos(nome,cpf,cpfFmt,end,empresa,pep){
       {...ddA('https://www.cofeci.gov.br/',`Pesquisar: "${nome}"`),label:'CRECI/COFECI — corretor de imóveis',p:'r'},
       {...ddA('https://www.bcb.gov.br/',`Pesquisar: "${nome}"`),label:'BACEN — operador financeiro / câmbio',p:'r'},
       {...ddA('https://www.cvm.gov.br/',`Pesquisar: "${nome}"`),label:'CVM — agente autônomo de investimentos',p:'r'},
-      {...ddA('https://portaldatransparencia.gov.br/sancoes/ceis?termo='+encodeURIComponent(nome),nome),label:'🔴 CEIS — impedido de contratar com o governo',p:'r'},
-      {...ddA('https://portaldatransparencia.gov.br/sancoes/cnep?termo='+encodeURIComponent(nome),nome),label:'🔴 CNEP — punições e sanções',p:'r'},
+      {...ddA('https://portaldatransparencia.gov.br/sancoes/ceis?termo='+encodeURIComponent(nome),nome),label:'🔴 CEIS — impedido de contratar com o governo',p:'r',v:ddVfPortal('ceis','nomeSancionado='+encodeURIComponent(nome))},
+      {...ddA('https://portaldatransparencia.gov.br/sancoes/cnep?termo='+encodeURIComponent(nome),nome),label:'🔴 CNEP — punições e sanções',p:'r',v:ddVfPortal('cnep','nomeSancionado='+encodeURIComponent(nome))},
       {...ddA('https://sit.trabalho.gov.br/radar/',`Pesquisar: "${nome}" ou CPF`),label:'🔴 Lista Suja MTE — trabalho escravo',p:'r'},
       {...ddG(`"${nome}" conselho OR CRM OR CRO OR OAB OR CREA OR suspenso OR cassado OR cancelado OR inabilitado`),label:'Google — situação em conselhos profissionais',p:'r',isMidia:true},
     ]},
@@ -363,6 +474,7 @@ function ddMidiasHTML(alvo, doc){
 
 // ── RENDER GRUPOS ─────────────────────────
 function ddRenderGrupos(grupos){
+  ddVfFila=[]; // descarta selos de uma geração anterior de links
   return grupos.map(g=>{
     const linksHtml=g.items.map(l=>ddLiHTML(l)).join('');
     const allUrls=g.items.filter(i=>!i.disabled&&i.url&&i.url!=='#').map(i=>i.url);
@@ -528,7 +640,7 @@ function pjRender(info,cnpjNum,apiName){
   <div class="section" style="margin-bottom:13px">
     <div class="section-header"><h2>🔗 Links — busca exata + mídias negativas</h2><div style="display:flex;gap:5px;flex-wrap:wrap"><span class="badge badge-alto">CRÍTICO</span><span class="badge badge-medio">ATENÇÃO</span><span class="badge badge-baixo">BASE</span><span style="font-size:.66rem;background:#fde8ff;color:#7e22ce;padding:2px 7px;border-radius:4px;font-weight:700">🟣 MÍDIA NEG.</span></div></div>
     <div class="section-body">
-      <div style="background:#f0fdf9;border:1px solid #6ee7b7;border-radius:7px;padding:8px 12px;margin-bottom:13px;font-size:.77rem;color:#065f46;display:flex;gap:7px;align-items:center"><span>ℹ️</span><span>Abra cada link e confira o resultado manualmente — os selos marcados <strong>🟣 MÍDIA NEG.</strong> indicam queries booleanas voltadas a achar conteúdo negativo.</span></div>
+      <div style="background:#f0fdf9;border:1px solid #6ee7b7;border-radius:7px;padding:8px 12px;margin-bottom:13px;font-size:.77rem;color:#065f46;display:flex;gap:7px;align-items:center"><span>ℹ️</span><span>Fontes com selo <strong style="color:#15803d">✅</strong>/<strong style="color:#b91c1c">🔴</strong> foram consultadas automaticamente na própria base oficial — o número indica quantos registros a fonte retornou. Selo <strong>manual</strong> = a fonte não tem API pública (CAPTCHA/bloqueio): abra o link e confira. Selos <strong>🟣 MÍDIA NEG.</strong> indicam queries booleanas voltadas a achar conteúdo negativo.</span></div>
       ${ddRenderGrupos(grupos)}
     </div>
   </div>
@@ -542,6 +654,7 @@ function pjRender(info,cnpjNum,apiName){
   const res=document.getElementById('pj-result');
   res.innerHTML=html;res.style.display='block';
   res.scrollIntoView({behavior:'smooth',block:'start'});
+  ddRodarVerificacoes();
 }
 
 // ── ANÁLISE IA — Due Diligence ──────────────
@@ -640,7 +753,7 @@ function pfRender(nome,cpf,cpfFmt,end,empresa,pep){
   <div class="section" style="margin-bottom:13px">
     <div class="section-header"><h2>🔗 Links — busca exata + mídias negativas</h2><div style="display:flex;gap:5px;flex-wrap:wrap"><span class="badge badge-alto">CRÍTICO</span><span class="badge badge-medio">ATENÇÃO</span><span class="badge badge-baixo">BASE</span><span style="font-size:.66rem;background:#fde8ff;color:#7e22ce;padding:2px 7px;border-radius:4px;font-weight:700">🟣 MÍDIA NEG.</span></div></div>
     <div class="section-body">
-      <div style="background:#f0fdf9;border:1px solid #6ee7b7;border-radius:7px;padding:8px 12px;margin-bottom:13px;font-size:.77rem;color:#065f46;display:flex;gap:7px;align-items:center"><span>ℹ️</span><span>Abra cada link e confira o resultado manualmente — os selos marcados <strong>🟣 MÍDIA NEG.</strong> indicam queries booleanas voltadas a achar conteúdo negativo.</span></div>
+      <div style="background:#f0fdf9;border:1px solid #6ee7b7;border-radius:7px;padding:8px 12px;margin-bottom:13px;font-size:.77rem;color:#065f46;display:flex;gap:7px;align-items:center"><span>ℹ️</span><span>Fontes com selo <strong style="color:#15803d">✅</strong>/<strong style="color:#b91c1c">🔴</strong> foram consultadas automaticamente na própria base oficial — o número indica quantos registros a fonte retornou. Selo <strong>manual</strong> = a fonte não tem API pública (CAPTCHA/bloqueio): abra o link e confira. Selos <strong>🟣 MÍDIA NEG.</strong> indicam queries booleanas voltadas a achar conteúdo negativo.</span></div>
       ${ddRenderGrupos(grupos)}
     </div>
   </div>
@@ -650,6 +763,7 @@ function pfRender(nome,cpf,cpfFmt,end,empresa,pep){
   const res=document.getElementById('pf-result');
   res.innerHTML=html;res.style.display='block';
   res.scrollIntoView({behavior:'smooth',block:'start'});
+  ddRodarVerificacoes();
 }
 
 // ── AÇÕES PJ ──────────────────────────────
@@ -690,6 +804,7 @@ function pjSomenteLinks(){
     <div class="section"><div class="section-header"><h2>🔗 Links de pesquisa</h2></div><div class="section-body">${ddRenderGrupos(grupos)}</div></div>
     <div class="dd-disc">Todos os links usam aspas duplas para busca exata. Se não encontrar resultado, remova as aspas manualmente no Google.</div>`;
   res.style.display='block';res.scrollIntoView({behavior:'smooth',block:'start'});
+  ddRodarVerificacoes();
 }
 
 function pfGerar(){
