@@ -519,14 +519,18 @@ async function dd2Iniciar(){
     document.getElementById('dd2-sec-socios').style.display='block';
     document.getElementById('dd2-socios-content').innerHTML='<div class="dd2-loading">&#9203; Investigando cada sócio (PEP, sanções, TCU, mídia negativa)...</div>';
     tasks.push(
-      cadastralPromise.then(cad=>{
+      // Espera também o DJEN (quando a consulta judicial está ligada) pra
+      // cruzar as comunicações processuais por sócio sem repetir chamadas —
+      // o catch garante que uma falha do DJEN vira "não verificado" (null)
+      // em vez de derrubar a investigação dos sócios inteira.
+      Promise.all([cadastralPromise,scJud?djenItemsPromise.catch(()=>null):Promise.resolve(null)]).then(([cad,djenItems])=>{
         const socios=(cad?.socios||[]).filter(s=>s.nome);
         if(!socios.length){
           document.getElementById('dd2-socios-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Nenhum sócio listado no QSA — nada a investigar.</p>';
           dd2SetStep('socios','done');
           return;
         }
-        return dd2InvestigarSocios(socios).then(res=>{
+        return dd2InvestigarSocios(socios,djenItems).then(res=>{
           dd2SociosData=res;dd2SociosFalhou=false;
           dd2RenderSocios(res);
           dd2SetStep('socios','done');dd2SetProgress(72);
@@ -1494,12 +1498,24 @@ function dd2NomesBatem(nomeAlvo,nomeCandidato){
   return tokensAlvo.filter(t=>tokensCand.has(t)).length>=need;
 }
 
-async function dd2InvestigarSocios(socios){
+// djenItems: itens já buscados pela seção Judicial (que consulta o DJEN por
+// nomeParte de cada sócio) — cruzamos aqui por nome em vez de repetir as
+// chamadas, senão estouraria o rate limit do DJEN (20 req/janela). Vem null
+// quando a consulta judicial está desligada/falhou = "não verificado".
+async function dd2InvestigarSocios(socios,djenItems){
   const alvo=(socios||[]).filter(s=>s.nome).slice(0,DD2_SOCIOS_MAX);
   const chamar=(rota,params)=>fetch(dd2PortalUrl(rota,params+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(12000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(d=>Array.isArray(d)?d:[]);
+  const judicialDoSocio=(nome)=>{
+    if(!Array.isArray(djenItems))return null; // não verificado
+    const nomeUp=nome.toUpperCase();
+    return djenItems.filter(item=>
+      (item.destinatarios||[]).some(d=>dd2NomesBatem(nome,d.nome||''))||
+      String(item.texto||'').toUpperCase().includes(nomeUp)
+    );
+  };
   return Promise.all(alvo.map(async s=>{
     const enc=encodeURIComponent(s.nome);
-    const [pepR,ceisR,cnepR,ceafR,intlR,tcuR,midiaR]=await Promise.allSettled([
+    const [pepR,ceisR,cnepR,ceafR,intlR,tcuR,midiaR,qdR,douR]=await Promise.allSettled([
       dd2FetchPep(s.nome,''),
       chamar('ceis','nomeSancionado='+enc),
       chamar('cnep','nomeSancionado='+enc),
@@ -1507,8 +1523,14 @@ async function dd2InvestigarSocios(socios){
       dd2FetchSanctionsNetwork(s.nome).then(h=>dd2FiltrarRuidoSancoesIntl(h,s.nome)),
       dd2FetchTCUInidoneos().then(items=>dd2TcuPorNome(items,s.nome)),
       dd2FetchGoogleNewsRSS(`"${s.nome}" AND (fraude OR corrupção OR condenado OR investigação OR "lavagem de dinheiro" OR crime OR golpe OR escândalo)`),
+      dd2FetchQueridoDiario(s.nome),
+      dd2FetchDOU(s.nome),
     ]);
     const pega=r=>r.status==='fulfilled'&&Array.isArray(r.value)?r.value:[];
+    const diarios=[
+      ...pega(douR).map(d=>dd2NormalizarDiario(d,'DOU')),
+      ...pega(qdR).map(d=>dd2NormalizarDiario(d,'QD')),
+    ];
     return{
       nome:s.nome,qual:s.qual||'',
       pep:pega(pepR).filter(p=>dd2NomesBatem(s.nome,p.nome||'')),
@@ -1518,16 +1540,19 @@ async function dd2InvestigarSocios(socios){
       intl:pega(intlR),
       tcu:pega(tcuR),
       midia:pega(midiaR).slice(0,5),
+      judicial:judicialDoSocio(s.nome),
+      diarios:diarios.slice(0,8),
       falhas:{
         pep:pepR.status==='rejected',ceis:ceisR.status==='rejected',cnep:cnepR.status==='rejected',
         ceaf:ceafR.status==='rejected',intl:intlR.status==='rejected',tcu:tcuR.status==='rejected',midia:midiaR.status==='rejected',
+        diarios:qdR.status==='rejected'&&douR.status==='rejected',
       },
     };
   }));
 }
 
 function dd2SocioTemAchado(s){
-  return !!(s.pep.length||s.ceis.length||s.cnep.length||s.ceaf.length||s.intl.length||s.tcu.length||s.midia.length);
+  return !!(s.pep.length||s.ceis.length||s.cnep.length||s.ceaf.length||s.intl.length||s.tcu.length||s.midia.length||(s.judicial?.length)||(s.diarios?.length));
 }
 
 function dd2RenderSocios(lista){
@@ -1541,6 +1566,8 @@ function dd2RenderSocios(lista){
     if(s.intl.length)badges.push('<span class="dd2-badge danger">Sanção Internacional</span>');
     if(s.ceaf.length)badges.push('<span class="dd2-badge danger">CEAF</span>');
     if(s.pep.length)badges.push('<span class="dd2-badge pep">&#9888; PEP</span>');
+    if(s.judicial?.length)badges.push(`<span class="dd2-badge warn">&#9878; ${s.judicial.length} comunicação(ões) DJEN</span>`);
+    if(s.diarios?.length)badges.push(`<span class="dd2-badge warn">&#128220; ${s.diarios.length} diário(s)</span>`);
     if(s.midia.length)badges.push(`<span class="dd2-badge warn">&#128240; ${s.midia.length} notícia(s)</span>`);
     const falhouAlgo=Object.values(s.falhas).some(Boolean);
     const limpo=!badges.length;
@@ -1554,8 +1581,11 @@ function dd2RenderSocios(lista){
       ${linhaBase('CEAF (punição disciplinar)',s.ceaf,x=>`<li>${escapeHtml(x.punicao?.nomePunido||x.nomePunido)||'—'} — ${escapeHtml(x.tipoPunicao?.descricao)||'punição'} (${escapeHtml(x.orgaoLotacao?.nome)||'—'})</li>`)}
       ${linhaBase('TCU — inidôneos',s.tcu,x=>`<li>${escapeHtml(x.nome)||'—'} ${x.cpf_cnpj?'('+escapeHtml(x.cpf_cnpj)+')':''} — processo ${escapeHtml(x.processo)||'—'}${x.data_final?', vigente até '+escapeHtml(String(x.data_final).slice(0,10)):''}</li>`)}
       ${linhaBase('Sanções internacionais (indício — confirmar na fonte)',s.intl,x=>`<li>${escapeHtml((x.names||[]).join(', '))||'—'}${x.source?' — '+escapeHtml(String(x.source).toUpperCase()):''}</li>`)}
+      ${linhaBase('Comunicações processuais (DJEN) em que o sócio aparece',s.judicial||[],p=>`<li>${escapeHtml(p.tipoComunicacao)||'Comunicação'} — ${escapeHtml(p.nomeClasse||p.numeroprocessocommascara)||'processo'} <span style="color:#94a3b8;font-size:.75rem">(${escapeHtml(p.siglaTribunal)||'—'}, ${escapeHtml(p.data_disponibilizacao)||'—'})</span></li>`)}
+      ${linhaBase('Menções em diários oficiais (DOU + municipais)',s.diarios||[],d=>`<li>${d.url?`<a href="${escapeHtml(d.url)}" target="_blank" style="color:#0f2d4a">${escapeHtml(d.titulo)||'—'}</a>`:escapeHtml(d.titulo)||'—'} <span style="color:#94a3b8;font-size:.75rem">(${escapeHtml(d.local)||''}, ${escapeHtml(d.data)||''})</span>${(d.trechos&&d.trechos[0])?`<div style="color:#64748b;font-size:.76rem;margin-top:2px">"…${escapeHtml(d.trechos[0].slice(0,220))}…"</div>`:''}</li>`)}
+      ${s.judicial===null?'<div style="color:#94a3b8;margin-top:6px;font-size:.78rem">⚖ Processos (DJEN): não verificados — a consulta judicial está desligada ou falhou nesta investigação.</div>':''}
       ${linhaBase('Mídia negativa',s.midia,n=>`<li><a href="${escapeHtml(n.link)||'#'}" target="_blank" style="color:#0f2d4a">${escapeHtml(n.title)||'—'}</a> <span style="color:#94a3b8;font-size:.75rem">(${n.pubDate?new Date(n.pubDate).toLocaleDateString('pt-BR'):''} — ${escapeHtml(n.source?.name)||''})</span></li>`)}
-      ${limpo&&!falhouAlgo?'<div style="color:#22c55e;margin-top:6px">✅ Nenhum apontamento nas bases consultadas (PEP, CEIS, CNEP, CEAF, TCU, sanções internacionais e mídia negativa).</div>':''}
+      ${limpo&&!falhouAlgo?'<div style="color:#22c55e;margin-top:6px">✅ Nenhum apontamento nas bases consultadas (PEP, CEIS, CNEP, CEAF, TCU, sanções internacionais, DJEN, diários oficiais e mídia negativa).</div>':''}
       ${falhouAlgo?`<div style="color:#b45309;margin-top:6px">⚠️ Bases que falharam nesta consulta: ${Object.entries(s.falhas).filter(([,v])=>v).map(([k])=>k.toUpperCase()).join(', ')} — não é "nada encontrado", é "não verificado".</div>`:''}
       <div style="margin-top:10px" class="dd2-links-ext">
         <a href="https://www.jusbrasil.com.br/consulta-processual/?q=${encodeURIComponent(s.nome)}" target="_blank" class="dd2-link-ext">🔗 JusBrasil</a>
@@ -1575,7 +1605,7 @@ function dd2RenderSocios(lista){
   }).join('');
   const extras=(lista.length<(dd2CadastralData?.socios||[]).length)?`<p style="font-size:.75rem;color:#94a3b8;margin-top:8px">Investigação automática limitada aos ${DD2_SOCIOS_MAX} primeiros sócios do QSA — os demais aparecem nos links manuais da seção Judicial.</p>`:'';
   el.innerHTML=`
-    <p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Cada sócio do QSA é verificado individualmente em: <strong>PEP</strong>, <strong>CEIS</strong>, <strong>CNEP</strong>, <strong>CEAF</strong>, <strong>inidôneos do TCU</strong>, <strong>sanções internacionais</strong> e <strong>mídia negativa</strong>. Clique num sócio pra ver o detalhe. Buscas por nome podem trazer homônimos — trate como indício e confirme pelo CPF na fonte antes de decidir.</p>
+    <p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Cada sócio do QSA é verificado individualmente em: <strong>PEP</strong>, <strong>CEIS</strong>, <strong>CNEP</strong>, <strong>CEAF</strong>, <strong>inidôneos do TCU</strong>, <strong>sanções internacionais</strong>, <strong>processos (DJEN)</strong>, <strong>diários oficiais (DOU + municipais)</strong> e <strong>mídia negativa</strong>. Clique num sócio pra ver o detalhe. Buscas por nome podem trazer homônimos — trate como indício e confirme pelo CPF na fonte antes de decidir.</p>
     ${blocos}${extras}`;
 }
 
