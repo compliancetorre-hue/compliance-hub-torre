@@ -75,9 +75,15 @@ async function logsLoad() {
   // Tentar Supabase (mais completo)
   if(USE_SUPABASE) {
     try {
-      const rows = await sbGet('audit_logs', 'order=ts&limit=1000');
+      // order=ts.desc — sem o ".desc" a ordenação é crescente (mais antigos
+      // primeiro); combinado com o limit=1000, quando a tabela passa de
+      // 1000 linhas os logs de HOJE ficam de fora, sobrando só os antigos
+      // (era exatamente esse o bug: "0 ações hoje" com logs de meses atrás).
+      const rows = await sbGet('audit_logs', 'order=ts.desc&limit=1000');
       if(rows && rows.length > 0) {
-        const logs = rows.reverse().map(r => ({
+        // rows já vem decrescente (mais recente primeiro) do servidor —
+        // sem reverse aqui, senão volta a ficar crescente (antigos primeiro).
+        const logs = rows.map(r => ({
           id: r.id, ts: r.ts, email: r.email, nome: r.nome,
           perfil: r.perfil, acao: r.acao, modulo: r.modulo,
           descricao: r.descricao,
