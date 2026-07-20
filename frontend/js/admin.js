@@ -529,18 +529,14 @@ async function usersSyncTabelaReal(extras) {
     const reais = await sbGet('usuarios', '');
     const lista = Array.isArray(reais) ? reais : [];
     const porEmail = new Map(lista.map(r => [r.email, r]));
-    // A coluna id da tabela real é NOT NULL sem default — inserir sem id
-    // estoura "violates not-null constraint" (verificado em produção).
-    // O formato do id (UUID vs. número) é descoberto pelo registro do
-    // admin, que sempre existe — sem ele nem o login do admin funcionaria.
-    const idExemplo = lista.find(r => r.id != null)?.id;
-    const idEhNumerico = typeof idExemplo === 'number' || /^\d+$/.test(String(idExemplo ?? ''));
-    let proximoId = idEhNumerico ? Math.max(0, ...lista.map(r => Number(r.id) || 0)) + 1 : 0;
+    // O id é GERADO PELO BANCO (GENERATED ALWAYS) — mandar um valor manual
+    // dá erro "Cannot insert a non-DEFAULT value into column id" (verificado
+    // em produção). Só inclui id quando for update de um registro que já
+    // existe; na criação, deixa o banco gerar.
     for(const u of extras) {
       const existente = porEmail.get(u.email);
       const row = { nome: u.nome, email: u.email, perfil: u.perfil, senha_hash: u.hash, ativo: true, tentativas_login: 0, bloqueado_ate: null };
       if(existente?.id != null) row.id = existente.id;
-      else row.id = idEhNumerico ? proximoId++ : crypto.randomUUID();
       try { await sbUpsert('usuarios', row); }
       catch(e) { console.warn('[usersSyncTabelaReal] Falha ao sincronizar', u.email, '—', e.message); }
     }
