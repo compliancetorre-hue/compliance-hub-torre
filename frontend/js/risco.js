@@ -31,7 +31,7 @@ function renderRiscos() {
     </tr>`;
   }).join('');
 }
-
+ 
 function renderHeatMap() {
   const container = document.getElementById('heat-map');
   const probs = [5,4,3,2,1];
