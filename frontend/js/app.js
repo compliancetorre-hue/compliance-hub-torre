@@ -4259,7 +4259,7 @@ function pjRender(info,cnpjNum,apiName){
 
 // ── ANÁLISE IA — Due Diligence ──────────────
 async function ddAnalisarComIA(razao,cnpj,nivel,score,alertas,atencao,situacao,porte,capital,abertura){
-  const GEMINI_KEY='AIzaSyB6ZjO_Lj9AhpphMZtwUKYeQdzRWLu6Qm8';
+  const GEMINI_KEY='';// chave removida — exposta publicamente era risco; use a rota /gemini/analyze da Edge Function
   const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key='+GEMINI_KEY;
   const panel=document.getElementById('dd-ai-result');
   if(!panel) return;
@@ -6311,7 +6311,7 @@ function rmDeleteUnit(idx) {
 async function aiAnalisarRiscos() {
   const btn=document.getElementById('btn-ai-risco');
   if(btn){btn.disabled=true;btn.textContent='⏳ Analisando...';}
-  const GEMINI_KEY='AIzaSyB6ZjO_Lj9AhpphMZtwUKYeQdzRWLu6Qm8';
+  const GEMINI_KEY='';// chave removida — exposta publicamente era risco; use a rota /gemini/analyze da Edge Function
   const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key='+GEMINI_KEY;
   const riscos=(DB.riscos||[]);
   const lista=riscos.map(r=>`[${r.unidade||'?'}] ${r.desc} P:${r.prob} I:${r.impacto} Controle:${r.controle||'Nenhum'}`).join('\n');
