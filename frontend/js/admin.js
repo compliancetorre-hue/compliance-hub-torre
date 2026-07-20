@@ -527,17 +527,26 @@ async function usersSave() {
 async function usersSyncTabelaReal(extras) {
   try {
     const reais = await sbGet('usuarios', '');
-    const porEmail = new Map((Array.isArray(reais)?reais:[]).map(r => [r.email, r]));
+    const lista = Array.isArray(reais) ? reais : [];
+    const porEmail = new Map(lista.map(r => [r.email, r]));
+    // A coluna id da tabela real é NOT NULL sem default — inserir sem id
+    // estoura "violates not-null constraint" (verificado em produção).
+    // O formato do id (UUID vs. número) é descoberto pelo registro do
+    // admin, que sempre existe — sem ele nem o login do admin funcionaria.
+    const idExemplo = lista.find(r => r.id != null)?.id;
+    const idEhNumerico = typeof idExemplo === 'number' || /^\d+$/.test(String(idExemplo ?? ''));
+    let proximoId = idEhNumerico ? Math.max(0, ...lista.map(r => Number(r.id) || 0)) + 1 : 0;
     for(const u of extras) {
       const existente = porEmail.get(u.email);
       const row = { nome: u.nome, email: u.email, perfil: u.perfil, senha_hash: u.hash, ativo: true, tentativas_login: 0, bloqueado_ate: null };
-      if(existente?.id) row.id = existente.id;
+      if(existente?.id != null) row.id = existente.id;
+      else row.id = idEhNumerico ? proximoId++ : crypto.randomUUID();
       try { await sbUpsert('usuarios', row); }
       catch(e) { console.warn('[usersSyncTabelaReal] Falha ao sincronizar', u.email, '—', e.message); }
     }
     const emailsAtuais = new Set(extras.map(u => u.email));
-    for(const r of (Array.isArray(reais)?reais:[])) {
-      if(r.email !== ADMIN_EMAIL && !emailsAtuais.has(r.email) && r.id) {
+    for(const r of lista) {
+      if(r.email !== ADMIN_EMAIL && !emailsAtuais.has(r.email) && r.id != null) {
         try { await sbDelete('usuarios', r.id); }
         catch(e) { console.warn('[usersSyncTabelaReal] Falha ao excluir', r.email, '—', e.message); }
       }
