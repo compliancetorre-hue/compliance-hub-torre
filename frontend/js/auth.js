@@ -1,5 +1,5 @@
 let USUARIOS = [
-  { email:'admin@torre.com.br', hash:'32b1257273dc71a74bdd6462a8c4ab72a569a1d932c4e79d9a801605e3c2c270', nome:'Administrador', perfil:'Admin', avatar:'AD', cor:'#0f2d4a' },
+  { email:'admin@torre.com.br', hash:'92f2fac95a24752c198680b06ebca0c7d2bb6fd9cdaf88e8be4576b264466b5a', nome:'Administrador', perfil:'Admin', avatar:'AD', cor:'#0f2d4a' },
 ];
 // Email do admin — imutável
 const ADMIN_EMAIL = 'admin@torre.com.br';
