@@ -13,7 +13,7 @@ const JUNTAS_SLUG={AC:'acre-ac',AL:'alagoas-al-alagoas-al-1',AM:'amazonas-am',AP
 const JUNTAS_NOME={AC:'JUCEAC',AL:'JUCEAL',AM:'JUCEA',AP:'JUCAP',BA:'JUCEB',CE:'JUCEC',DF:'JUCIS-DF',ES:'JUCEES',GO:'JUCEG',MA:'JUCEMA',MG:'JUCEMG',MS:'JUCEMS',MT:'JUCEMAT',PA:'JUCEPA',PB:'JUCEP',PE:'JUCEPE',PI:'JUCEPI',PR:'JUCEPAR',RJ:'JUCERJA',RN:'JUCERN',RO:'JUCER',RR:'JUCERR',RS:'JUCIS-RS',SC:'JUCESC',SE:'JUCESE',SP:'JUCESP',TO:'JUCETINS'};
 const JUNTAS={};
 Object.keys(JUNTAS_SLUG).forEach(uf=>{JUNTAS[uf]={n:JUNTAS_NOME[uf],u:`https://www.gov.br/empresas-e-negocios/pt-br/drei/juntas-comerciais/${JUNTAS_SLUG[uf]}`};});
-
+ 
 // ── MASKS ─────────────────────────────────
 function ddMC(v){v=v.replace(/\D/g,'');v=v.replace(/^(\d{2})(\d)/,'$1.$2');v=v.replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3');v=v.replace(/\.(\d{3})(\d)/,'.$1/$2');v=v.replace(/(\d{4})(\d)/,'$1-$2');return v.substr(0,18);}
 function ddMCpf(v){v=v.replace(/\D/g,'');v=v.replace(/(\d{3})(\d)/,'$1.$2');v=v.replace(/(\d{3})(\d)/,'$1.$2');v=v.replace(/(\d{3})(\d{1,2})$/,'$1-$2');return v.substr(0,14);}
