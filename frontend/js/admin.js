@@ -16,6 +16,7 @@ const LOG_TIPOS = {
   'permissao':   { icon:'🔑', label:'Permissão',       cls:'update' },
   'senha':       { icon:'🔒', label:'Senha',           cls:'update' },
   'usuario':     { icon:'👤', label:'Usuário',         cls:'create' },
+  'pesquisa':    { icon:'🔍', label:'Pesquisa',         cls:'update' },
 };
 
 // Módulos legíveis
@@ -25,6 +26,7 @@ const LOG_MODULOS = {
   'filiais':'Filiais e Setores', 'agenda':'Agenda',
   'rm_planos':'Planos RM', 'usuarios':'Usuários', 'sistema':'Sistema',
   'fbboards':'Flow Board', 'permissoes':'Permissões',
+  'due-diligence':'Due Diligence', 'due-diligence2':'Due Diligence 2',
 };
 
 let _logsCache = null; // cache em memória para a sessão
