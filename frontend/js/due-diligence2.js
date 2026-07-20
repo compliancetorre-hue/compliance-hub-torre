@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════
 // DUE DILIGENCE 2 — KYC & MÍDIAS NEGATIVAS
 // ═══════════════════════════════════════════════════════
-
+ 
 function dd2HTML(){return `
 <style>
 .dd2-container{max-width:1200px;margin:0 auto;padding:20px}
