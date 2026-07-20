@@ -18,6 +18,9 @@ Object.keys(JUNTAS_SLUG).forEach(uf=>{JUNTAS[uf]={n:JUNTAS_NOME[uf],u:`https://w
 function ddMC(v){v=v.replace(/\D/g,'');v=v.replace(/^(\d{2})(\d)/,'$1.$2');v=v.replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3');v=v.replace(/\.(\d{3})(\d)/,'.$1/$2');v=v.replace(/(\d{4})(\d)/,'$1-$2');return v.substr(0,18);}
 function ddMCpf(v){v=v.replace(/\D/g,'');v=v.replace(/(\d{3})(\d)/,'$1.$2');v=v.replace(/(\d{3})(\d)/,'$1.$2');v=v.replace(/(\d{3})(\d{1,2})$/,'$1-$2');return v.substr(0,14);}
 function ddFmt(n){return n.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');}
+// CPF é dado pessoal (LGPD) — no log de auditoria mostra só os 2 últimos
+// dígitos, o suficiente pra rastrear sem expor o documento inteiro.
+function ddMascaraCpf(cpf){cpf=(cpf||'').replace(/\D/g,'');return cpf.length===11?`***.***.***-${cpf.slice(9)}`:'';}
 function ddV(id){const e=document.getElementById(id);return e?e.value.trim():'';}
 function ddSet(id,v){const e=document.getElementById(id);if(e&&v&&!e.value)e.value=v;}
 function ddSC(s){const u=(s||'').toUpperCase();if(u.includes('ATIVA')||u==='02')return'ok';if(u.includes('INAPT')||u.includes('SUSPENS')||u.includes('BAIXAD')||u.includes('CANCEL'))return'err';return'warn';}
@@ -720,6 +723,7 @@ async function pjConsultar(){
   const raw=ddV('pj-cnpj').replace(/\D/g,'');
   if(raw.length!==14){alert('Informe um CNPJ válido com 14 dígitos.');return;}
   ddCnpjN=raw;
+  if(typeof auditLog==='function') auditLog('pesquisa','due-diligence',`Consulta CNPJ ${ddFmt(raw)}`,{tipo:'cnpj'});
   const btn=document.getElementById('pj-btnapi');
   btn.disabled=true;document.getElementById('pj-bico').textContent='⏳';document.getElementById('pj-btxt').textContent='Consultando APIs...';
   document.getElementById('pj-log').innerHTML='';document.getElementById('pj-logwrap').style.display='block';
@@ -730,7 +734,7 @@ async function pjConsultar(){
   let found=null;
   for(const a of apis){const l=ddAddLog('pj',`Tentando ${a.name}...`,'spin');found=await ddTryApi(a.url,a.name,l);if(found)break;await new Promise(r=>setTimeout(r,350));}
   btn.disabled=false;document.getElementById('pj-bico').textContent='🔍';document.getElementById('pj-btxt').textContent='Consultar APIs + gerar links';
-  if(!found){ddAddLog('pj','Todas as APIs bloqueadas — ativando modo manual','err');pjBuildManLinks(raw);document.getElementById('pj-manbox').style.display='block';pjSomenteLinks();return;}
+  if(!found){ddAddLog('pj','Todas as APIs bloqueadas — ativando modo manual','err');pjBuildManLinks(raw);document.getElementById('pj-manbox').style.display='block';pjSomenteLinks(true);return;}
   const info=ddNorm(found.data,found.api);if(!info){ddAddLog('pj','Erro ao processar resposta','err');return;}
   ddSet('pj-razao',info.razao);if(info.endereco&&!ddV('pj-end'))ddSet('pj-end',info.endereco);
   if(info.socios?.length&&!ddV('pj-socios'))ddSet('pj-socios',info.socios.map(s=>s.nome).filter(Boolean).join(', '));
@@ -738,8 +742,11 @@ async function pjConsultar(){
   pjRender(info,raw,found.api);
 }
 
-function pjSomenteLinks(){
+// interno=true quando chamado pelo próprio pjConsultar() como fallback (todas
+// as APIs falharam) — evita logar a mesma pesquisa duas vezes.
+function pjSomenteLinks(interno){
   const raw=ddV('pj-cnpj').replace(/\D/g,'');if(!raw){alert('Informe o CNPJ primeiro.');return;}
+  if(!interno && typeof auditLog==='function') auditLog('pesquisa','due-diligence',`Consulta CNPJ ${ddFmt(raw)} (links manuais)`,{tipo:'cnpj'});
   ddCnpjN=raw;const cnpjFmt=ddFmt(raw);
   const razao=ddV('pj-razao')||ddV('pj-fantasia')||cnpjFmt;
   const fantasia=ddV('pj-fantasia');const endStr=ddV('pj-end');
@@ -760,6 +767,7 @@ function pfGerar(){
   const nome=ddV('pf-nome');
   if(!nome){alert('Informe o nome completo da pessoa física.');return;}
   const cpf=ddV('pf-cpf').replace(/\D/g,'');
+  if(typeof auditLog==='function') auditLog('pesquisa','due-diligence',`Consulta CPF de "${nome}"${cpf?' — '+ddMascaraCpf(cpf):''}`,{tipo:'cpf'});
   const cpfFmt=cpf.length===11?cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'):ddV('pf-cpf');
   const end=ddV('pf-end');const empresa=ddV('pf-empresa');const pep=ddV('pf-pep');
   document.getElementById('pf-result').style.display='none';document.getElementById('pf-result').innerHTML='';
