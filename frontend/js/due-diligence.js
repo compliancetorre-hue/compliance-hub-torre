@@ -663,81 +663,13 @@ function pjRender(info,cnpjNum,apiName){
   </div>
   <div class="dd-disc">⚠️ Busca exata com aspas duplas · Queries booleanas para mídias negativas eliminam ruído de redes sociais · Não substitui due diligence jurídica · ${dtStr}</div>
   <div style="display:flex;gap:10px;margin-top:14px">
-    <button class="btn btn-accent" onclick="ddAnalisarComIA('${razao}','${cnpjFmt}','${nivel}',${scoreRisco},${alertas.length},${atencao.length},'${info.situacao||''}','${info.porte||''}','${info.capital||''}','${info.abertura||''}')" style="flex:1;justify-content:center">🤖 Análise Profunda com IA — Gemini</button>
-    <button class="btn btn-outline" onclick="window.print()" style="justify-content:center">🖨️ PDF</button>
-  </div>
-  <div id="dd-ai-result" style="display:none;margin-top:16px"></div>`;
+    <button class="btn btn-outline" onclick="window.print()" style="flex:1;justify-content:center">🖨️ Imprimir / Salvar como PDF</button>
+  </div>`;
 
   const res=document.getElementById('pj-result');
   res.innerHTML=html;res.style.display='block';
   res.scrollIntoView({behavior:'smooth',block:'start'});
   ddRodarVerificacoes();
-}
-
-// ── ANÁLISE IA — Due Diligence ──────────────
-// A chave do Gemini é PESSOAL e NUNCA deve existir no cliente (ficaria
-// visível a qualquer visitante via "Ver código-fonte", igual ao problema já
-// corrigido com a chave do Portal da Transparência). A chamada passa pela
-// Edge Function, que guarda a chave como secret do lado do servidor — ver
-// rota POST /gemini/analyze no backend.
-async function ddAnalisarComIA(razao,cnpj,nivel,score,alertas,atencao,situacao,porte,capital,abertura){
-  const panel=document.getElementById('dd-ai-result');
-  if(!panel) return;
-  panel.style.display='block';
-  panel.innerHTML=`<div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:12px 16px;border-radius:10px 10px 0 0;display:flex;align-items:center;gap:10px"><span style="color:#fff;font-weight:700">🤖 Análise Profunda com Gemini IA</span><div style="margin-left:auto;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite"></div></div><div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px;padding:16px;font-size:.85rem;line-height:1.8;color:#374151">⏳ Analisando a empresa com inteligência artificial...</div>`;
-
-  const prompt=`Você é um especialista em due diligence corporativa e análise de risco contratual brasileiro. Analise a empresa abaixo e forneça um parecer profissional completo como se estivesse preparando um relatório executivo para um diretor decidir se fecha ou não um contrato.
-
-EMPRESA ANALISADA:
-- Razão Social: ${razao}
-- CNPJ: ${cnpj}
-- Situação Receita Federal: ${situacao}
-- Porte: ${porte}
-- Capital Social: ${capital}
-- Data de Abertura: ${abertura}
-- Score de Risco Calculado: ${score} pontos
-- Nível de Risco: ${nivel.toUpperCase()}
-- Alertas Críticos: ${alertas}
-- Pontos de Atenção: ${atencao}
-
-Forneça uma análise estruturada com:
-
-## 1. PARECER EXECUTIVO (3-4 linhas diretas e objetivas)
-
-## 2. PRINCIPAIS RISCOS IDENTIFICADOS
-Liste os riscos mais relevantes com base nos dados cadastrais.
-
-## 3. PONTOS QUE PRECISAM SER INVESTIGADOS
-O que verificar obrigatoriamente antes de assinar.
-
-## 4. CLÁUSULAS CONTRATUAIS RECOMENDADAS
-Quais proteções incluir no contrato caso decida avançar.
-
-## 5. VEREDICTO FINAL
-Uma linha clara: APROVAR / APROVAR COM RESSALVAS / REPROVAR — com justificativa objetiva.
-
-Seja direto, profissional e objetivo. Use linguagem executiva. Responda em português.`;
-
-  try{
-    const r=await fetch(`${EDGE_URL}/gemini/analyze`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-app-token':(typeof getAppToken==='function'?getAppToken():'')},
-      body:JSON.stringify({prompt}),
-      signal:AbortSignal.timeout(30000)
-    });
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    const txt=d.text||'Sem resposta';
-    // Format markdown to HTML
-    const html=txt
-      .replace(/## (.+)/g,'<h3 style="color:#4f46e5;font-size:.9rem;font-weight:800;margin:14px 0 6px;border-bottom:2px solid #e0e7ff;padding-bottom:4px">$1</h3>')
-      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-      .replace(/\n- /g,'<br>• ')
-      .replace(/\n/g,'<br>');
-    panel.innerHTML=`<div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:12px 16px;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:space-between"><span style="color:#fff;font-weight:700">🤖 Análise Profunda com Gemini IA</span><button onclick="document.getElementById('dd-ai-result').style.display='none'" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:50%;width:24px;height:24px;cursor:pointer">✕</button></div><div style="background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 10px 10px;padding:16px;font-size:.85rem;line-height:1.8;color:#374151">${html}</div>`;
-  }catch(e){
-    panel.innerHTML=`<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px;color:#991b1b">❌ Erro ao consultar IA: ${e.message}</div>`;
-  }
 }
 
 // ── RENDER PF ─────────────────────────────
