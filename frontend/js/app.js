@@ -1,7 +1,7 @@
 // ===== CONSTANTES GLOBAIS =====
 const SUPABASE_URL  = '%%SUPABASE_URL%%';
 const EDGE_URL = SUPABASE_URL + '/functions/v1/api';
-
+ 
 document.addEventListener('DOMContentLoaded',function(){
   const c=document.getElementById('content');if(!c)return;
   const p=document.createElement('div');
