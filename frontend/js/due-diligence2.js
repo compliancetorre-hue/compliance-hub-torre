@@ -132,6 +132,7 @@ function dd2HTML(){return `
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-sancoes" checked> &#128171; Sanções e Restrições</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-socios" checked> &#128101; Investigação dos Sócios (CNPJ)</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-pep" checked> &#127963; PEP</label>
+      <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-contratos" checked> &#128196; Contratos c/ Governo Federal</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-midia"> &#128240; Mídia Negativa</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-diarios" checked> &#128240; Diários Oficiais (DOU + Municipais)</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-bolsa" checked> &#128176; Bolsa Família (CPF)</label>
@@ -159,6 +160,7 @@ function dd2HTML(){return `
       <span class="dd2-step" id="dd2-step-sancoes">&#128171; Sanções</span>
       <span class="dd2-step" id="dd2-step-socios">&#128101; Sócios</span>
       <span class="dd2-step" id="dd2-step-pep">&#127963; PEP</span>
+      <span class="dd2-step" id="dd2-step-contratos">&#128196; Contratos</span>
       <span class="dd2-step" id="dd2-step-midia">&#128240; Mídia</span>
       <span class="dd2-step" id="dd2-step-diarios">&#128240; Diários</span>
       <span class="dd2-step" id="dd2-step-bolsa">&#128176; Bolsa Família</span>
@@ -209,6 +211,10 @@ function dd2HTML(){return `
     <div class="dd2-card" id="dd2-sec-pep">
       <div class="dd2-card-title">&#127963; Pessoas Expostas Politicamente (PEP)</div>
       <div id="dd2-pep-content"><div class="dd2-loading">&#9203; Consultando base de PEPs...</div></div>
+    </div>
+    <div class="dd2-card" id="dd2-sec-contratos">
+      <div class="dd2-card-title">&#128196; Contratos com o Governo Federal</div>
+      <div id="dd2-contratos-content"><div class="dd2-loading">&#9203; Consultando Portal da Transparência...</div></div>
     </div>
     <div class="dd2-card" id="dd2-sec-midia" style="display:none">
       <div class="dd2-card-title">&#128240; Mídia Negativa</div>
@@ -267,6 +273,8 @@ let dd2CadastralData = null;
 let dd2SancoesData = {ceis:[],cnep:[],leniencia:[],cepim:[],ceaf:[],internacional:[]};
 let dd2PepData = [];
 let dd2PepFalhou = false;
+let dd2ContratosData = [];
+let dd2ContratosFalhou = false;
 let dd2MidiaData = [];
 let dd2MidiaFalhou = false;
 let dd2DiariosData = [];
@@ -344,6 +352,7 @@ async function dd2Iniciar(){
   const scSan=document.getElementById('dd2-sc-sancoes').checked;
   const scSocios=document.getElementById('dd2-sc-socios')?.checked??false;
   const scPep=document.getElementById('dd2-sc-pep').checked;
+  const scContratos=document.getElementById('dd2-sc-contratos').checked;
   const scMid=document.getElementById('dd2-sc-midia').checked;
   const scDiarios=document.getElementById('dd2-sc-diarios').checked;
   const scBolsa=document.getElementById('dd2-sc-bolsa').checked;
@@ -352,7 +361,7 @@ async function dd2Iniciar(){
   document.getElementById('dd2-sec-midia').style.display=scMid?'block':'none';
   document.getElementById('dd2-sec-bolsa').style.display=scBolsa?'block':'none';
   dd2SetProgress(5);
-  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[],leniencia:[],cepim:[],ceaf:[],tcu:[],internacional:[]};dd2PepData=[];dd2PepFalhou=false;dd2MidiaData=[];dd2MidiaFalhou=false;dd2DiariosData=[];dd2BolsaData=[];dd2SociosData=[];dd2SociosFalhou=false;dd2JudicialNomesAlvo=[];
+  dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[],leniencia:[],cepim:[],ceaf:[],tcu:[],internacional:[]};dd2PepData=[];dd2PepFalhou=false;dd2MidiaData=[];dd2MidiaFalhou=false;dd2DiariosData=[];dd2BolsaData=[];dd2SociosData=[];dd2SociosFalhou=false;dd2JudicialNomesAlvo=[];dd2ContratosData=[];dd2ContratosFalhou=false;
   const tasks=[];
 
   // Failsafe: se alguma chamada travar inesperadamente, libera a tela mesmo assim
@@ -560,6 +569,27 @@ async function dd2Iniciar(){
     dd2SetStep('pep','done');
     document.getElementById('dd2-pep-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta PEP não selecionada.</p>';
   }
+  if(scContratos && !semDoc){
+    dd2SetStep('contratos','active');
+    tasks.push(
+      Promise.all([cadastralPromise,nomeResolvidoPromise]).then(([cad,nomeResolvido])=>{
+        const nomeParaPncp=cad?.razao||nomeManual||nomeResolvido||'';
+        return dd2FetchContratosFederais(doc).then(d=>{
+          dd2ContratosData=d;dd2ContratosFalhou=false;dd2SetStep('contratos','done');
+          dd2RenderContratosFederais(d,false,nomeParaPncp);
+        }).catch(()=>{dd2SetStep('contratos','error');dd2ContratosData=[];dd2ContratosFalhou=true;dd2RenderContratosFederais([],true,nomeParaPncp);});
+      })
+    );
+  } else if(scContratos){
+    // Modo só-nome (sem documento) — a API do governo exige CPF/CNPJ, não
+    // existe busca por nome pra contratos federais. Ainda dá pra oferecer
+    // o link manual do PNCP, que busca por nome/palavra-chave.
+    dd2SetStep('contratos','done');
+    document.getElementById('dd2-contratos-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta automática de contratos federais exige CPF/CNPJ.</p>'+dd2PncpLinkHtml(nomeManual);
+  } else {
+    dd2SetStep('contratos','done');
+    document.getElementById('dd2-contratos-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta de contratos não selecionada.</p>';
+  }
   if(scMid){
     dd2SetStep('midia','active');
     tasks.push(
@@ -641,6 +671,19 @@ async function dd2FetchPep(nome,cpf){
   // Lança em vez de devolver [] silenciosamente — um HTTP de erro (ex.: 401
   // de token expirado) não pode virar "não é PEP" na tela, senão o score de
   // risco nunca reflete uma falha real de verificação.
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const d=await r.json();
+  return Array.isArray(d)?d:[];
+}
+
+// Consulta contratos com o Poder Executivo Federal por CPF/CNPJ do
+// fornecedor. É especificamente FEDERAL — a API do Portal da
+// Transparência não cobre licitação/contrato de estado ou município (cada
+// um teria seu próprio portal, bem fragmentado). Útil pra conflito de
+// interesse/PLD: fornecedor que já contrata com o governo.
+async function dd2FetchContratosFederais(doc){
+  if(!doc)return[];
+  const r=await fetch(dd2PortalUrl('contratos-federais','cpfCnpj='+doc+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(12000)});
   if(!r.ok)throw new Error('HTTP '+r.status);
   const d=await r.json();
   return Array.isArray(d)?d:[];
@@ -1482,6 +1525,46 @@ function dd2RenderPep(data,falhou){
   if(!Array.isArray(data)||!data.length){el.innerHTML='<p style="color:#22c55e;font-weight:600">✅ Nenhum registro PEP encontrado.</p>';return;}
   el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Nome</th><th>Cargo / Função</th><th>Órgão</th><th>Período</th><th>Status</th></tr></thead>
   <tbody>${data.slice(0,50).map(p=>`<tr><td>${escapeHtml(p.nome)||'—'}</td><td>${escapeHtml(p.descricao_funcao)||'—'}</td><td>${escapeHtml(p.nome_orgao)||'—'}</td><td>${escapeHtml(p.dt_inicio_exercicio)||'—'} – ${escapeHtml(p.dt_fim_exercicio)||'atual'}</td><td><span class="dd2-badge pep">&#9888; PEP</span></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+// Contratos com o Poder Executivo Federal — não é necessariamente negativo
+// (é normal fornecedor legítimo ter contrato com o governo), por isso não
+// entra no score de risco; é só informativo/complementar pra conflito de
+// interesse. A ressalva de cobertura (só federal) fica sempre visível,
+// inclusive quando não acha nada, pra não passar a impressão de que
+// "sem contrato federal" = "sem contrato com qualquer governo".
+// Link manual pro PNCP (Portal Nacional de Contratações Públicas) —
+// cobre federal+estadual+municipal por lei (14.133/2021), mas confirmamos
+// no Swagger oficial (v3/api-docs) que a API pública não tem NENHUM
+// parâmetro de busca por CNPJ/nome do fornecedor (só por CNPJ do órgão
+// contratante, período, UF, etc.) — a mesma limitação existe na tela de
+// busca do site. O único campo que aceita texto livre é "palavra-chave"
+// (parâmetro `q`), que pesquisa no OBJETO do contrato, não no nome do
+// fornecedor — testamos com "TORRE E CIA SUPERMERCADOS" e o único
+// resultado foi um contrato de café "torrado" (match de texto, não de
+// empresa). Por isso isso aqui é só um atalho de verificação manual,
+// nunca uma checagem automática confiável.
+function dd2PncpLinkHtml(nome){
+  if(!nome) return '';
+  const url='https://pncp.gov.br/app/contratos?pagina=1&status=todos&q='+encodeURIComponent(nome);
+  return `<div style="margin-top:8px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+    <p style="font-size:.72rem;color:#64748b;margin-bottom:4px">🔎 Não existe API pública para checar automaticamente contratos com <strong>estados e municípios</strong> — o PNCP (portal nacional que reúne os três níveis de governo) não permite filtrar por CNPJ/nome do fornecedor, só por texto livre no objeto do contrato. Como ponto de partida pra uma verificação manual:</p>
+    <a href="${url}" target="_blank" rel="noopener" style="font-size:.78rem">Pesquisar "${escapeHtml(nome)}" no PNCP (todos os entes federativos) →</a>
+  </div>`;
+}
+function dd2RenderContratosFederais(data,falhou,nome){
+  const el=document.getElementById('dd2-contratos-content');
+  const aviso='<p style="font-size:.72rem;color:#94a3b8;margin-bottom:8px">⚠️ Cobre só o Poder Executivo Federal — não inclui contratos com estados ou municípios, que ficam em portais de transparência próprios de cada um.</p>';
+  const pncpLink=dd2PncpLinkHtml(nome);
+  if(falhou){el.innerHTML='<p style="color:#ef4444;font-weight:600">⚠️ Não foi possível consultar contratos com o Governo Federal no momento.</p>'+aviso+pncpLink;return;}
+  if(!Array.isArray(data)||!data.length){el.innerHTML='<p style="color:#22c55e;font-weight:600;margin-bottom:8px">✅ Nenhum contrato encontrado com o Governo Federal.</p>'+aviso+pncpLink;return;}
+  el.innerHTML=aviso+`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Número</th><th>Objeto</th><th>Órgão</th><th>Vigência</th><th>Valor</th><th>Status</th></tr></thead>
+  <tbody>${data.slice(0,50).map(c=>{
+    const orgao=c.unidadeGestora?.nome||c.unidadeGestora?.orgaoVinculado?.nome||'—';
+    const valor=c.valorFinalCompra??c.valorInicialCompra;
+    const objeto=c.objeto||'';
+    return `<tr><td>${escapeHtml(c.numero)||'—'}</td><td style="max-width:280px">${escapeHtml(objeto.substring(0,150))}${objeto.length>150?'…':''}</td><td>${escapeHtml(orgao)}</td><td>${escapeHtml(c.dataInicioVigencia)||'—'} – ${escapeHtml(c.dataFimVigencia)||'—'}</td><td>${valor!=null?'R$ '+Number(valor).toLocaleString('pt-BR',{minimumFractionDigits:2}):'—'}</td><td><span class="dd2-badge info">${escapeHtml(c.situacaoContrato)||'—'}</span></td></tr>`;
+  }).join('')}</tbody></table></div>`+pncpLink;
 }
 
 // ═══ INVESTIGAÇÃO INDIVIDUAL DOS SÓCIOS (QSA) ═══
