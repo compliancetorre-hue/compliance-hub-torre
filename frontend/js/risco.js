@@ -880,10 +880,8 @@ function rmDeleteUnit(idx) {
   rmUpdateRiscoModalUnits();
   rmUpdatePlanoModalUnits();
 }
-// ── AI análise de riscos ──
-// A chave do Gemini NUNCA pode ficar no cliente: qualquer visitante lê o
-// fonte servido pelo GitHub Pages. A chamada passa pela Edge Function
-// (rota POST /gemini/analyze), que guarda a chave como secret no servidor.
+// ── AI análise de riscos — via Edge Function (geminiAnalisar em supabase.js).
+// A chave do Gemini nunca fica no frontend — só nos secrets do servidor.
 async function aiAnalisarRiscos() {
   const btn=document.getElementById('btn-ai-risco');
   if(btn){btn.disabled=true;btn.textContent='⏳ Analisando...';}
@@ -895,15 +893,12 @@ async function aiAnalisarRiscos() {
   panel.style.display='flex';
   panel.innerHTML='<div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:11px 16px;display:flex;align-items:center;justify-content:space-between"><span style="color:#fff;font-weight:700;font-size:.88rem">🤖 Análise de Risco — Gemini AI</span><button onclick="this.closest(\'#ai-risco-panel\').style.display=\'none\'" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:50%;width:24px;height:24px;cursor:pointer">✕</button></div><div id="ai-risco-body" style="padding:16px;background:#fff;overflow-y:auto;font-size:.85rem;line-height:1.7;flex:1">⏳ Analisando...</div>';
   try {
-    const r=await fetch(`${EDGE_URL}/gemini/analyze`,{method:'POST',headers:{'Content-Type':'application/json','x-app-token':(typeof getAppToken==='function'?getAppToken():'')},body:JSON.stringify({prompt}),signal:AbortSignal.timeout(30000)});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    const txt=d.text||'Sem resposta.';
+    const txt=await geminiAnalisar(prompt,{temperature:0.3,maxOutputTokens:1200});
     const body=document.getElementById('ai-risco-body');
-    if(body) body.innerHTML=txt.replace(/\n/g,'<br>').replace(/## (.*?)(<br>|$)/g,'<strong style="color:var(--primary);display:block;margin:10px 0 4px">$1</strong>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+    if(body) body.innerHTML=(txt||'Sem resposta.').replace(/\n/g,'<br>').replace(/## (.*?)(<br>|$)/g,'<strong style="color:var(--primary);display:block;margin:10px 0 4px">$1</strong>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
   } catch(e) {
     const body=document.getElementById('ai-risco-body');
-    if(body) body.innerHTML='<span style="color:var(--danger)">❌ '+e.message+'</span>';
+    if(body) body.innerHTML='<span style="color:var(--danger)">❌ '+escapeHtml(e.message)+'</span>';
   }
   if(btn){btn.disabled=false;btn.innerHTML='🤖 Avaliar com IA';}
 }
