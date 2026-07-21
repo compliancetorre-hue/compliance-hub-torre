@@ -335,7 +335,7 @@ async function dd2Iniciar(){
   if(doc.length<11 && !(tipo==='cpf'&&nomeManual)){alert('Informe um documento válido ou, pra CPF, ao menos o nome completo.');return;}
   const semDoc=doc.length<11;
   if(typeof auditLog==='function'){
-    const alvoLog=tipo==='cnpj'?`CNPJ ${dd2FmtDoc(doc,tipo)}`:(semDoc?`CPF de "${nomeManual}" (sem documento)`:`CPF ${typeof ddMascaraCpf==='function'?ddMascaraCpf(doc):'***'}`+(nomeManual?` de "${nomeManual}"`:''));
+    const alvoLog=tipo==='cnpj'?`CNPJ ${dd2FmtDoc(doc,tipo)}`:(semDoc?`CPF de "${nomeManual}" (sem documento)`:`CPF ${dd2FmtDoc(doc,tipo)}`+(nomeManual?` de "${nomeManual}"`:''));
     auditLog('pesquisa','due-diligence2',`Consulta ${alvoLog}`,{tipo});
   }
   const scCad=document.getElementById('dd2-sc-cadastral').checked;
