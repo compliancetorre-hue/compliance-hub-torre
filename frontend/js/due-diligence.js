@@ -767,8 +767,8 @@ function pfGerar(){
   const nome=ddV('pf-nome');
   if(!nome){alert('Informe o nome completo da pessoa física.');return;}
   const cpf=ddV('pf-cpf').replace(/\D/g,'');
-  if(typeof auditLog==='function') auditLog('pesquisa','due-diligence',`Consulta CPF de "${nome}"${cpf?' — '+ddMascaraCpf(cpf):''}`,{tipo:'cpf'});
   const cpfFmt=cpf.length===11?cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4'):ddV('pf-cpf');
+  if(typeof auditLog==='function') auditLog('pesquisa','due-diligence',`Consulta CPF de "${nome}"${cpfFmt?' — '+cpfFmt:''}`,{tipo:'cpf'});
   const end=ddV('pf-end');const empresa=ddV('pf-empresa');const pep=ddV('pf-pep');
   document.getElementById('pf-result').style.display='none';document.getElementById('pf-result').innerHTML='';
   pfRender(nome,cpf,cpfFmt,end,empresa,pep);
