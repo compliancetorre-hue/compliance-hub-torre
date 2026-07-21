@@ -76,6 +76,26 @@ async function sbDeleteProto(proto) {
   if(!r.ok) throw new Error(`sbDeleteProto: ${r.status}`);
 }
 
+// ── Análise com Gemini via Edge Function ──
+// A chamada ao Gemini nunca sai do servidor: a chave da API fica só nos
+// secrets da Edge Function (nunca no bundle do frontend, onde qualquer
+// visitante conseguiria copiá-la do código-fonte e usar por conta própria,
+// consumindo cota/gerando custo na conta do dono do projeto).
+async function geminiAnalisar(prompt, opts) {
+  const token = getAppToken();
+  if(!token) throw new Error('sessão inválida (sem token de servidor)');
+  const r = await fetch(`${EDGE_URL}/gemini/analyze`, {
+    method: 'POST', headers: _efH(),
+    body: JSON.stringify({ prompt, temperature: opts?.temperature, maxOutputTokens: opts?.maxOutputTokens })
+  });
+  if(!r.ok) {
+    const txt = await r.text().catch(()=>'');
+    throw new Error(`gemini/analyze: HTTP ${r.status} ${txt.slice(0,150)}`);
+  }
+  const d = await r.json();
+  return d.text || '';
+}
+
 // ── Map DB.denuncias item → Supabase row
 function dnToRow(d) {
   return {
