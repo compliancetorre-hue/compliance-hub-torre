@@ -1,7 +1,7 @@
 // ===== CONSTANTES GLOBAIS =====
 const SUPABASE_URL  = '%%SUPABASE_URL%%';
 const EDGE_URL = SUPABASE_URL + '/functions/v1/api';
- 
+
 document.addEventListener('DOMContentLoaded',function(){
   const c=document.getElementById('content');if(!c)return;
   const p=document.createElement('div');
@@ -4259,8 +4259,6 @@ function pjRender(info,cnpjNum,apiName){
 
 // ── ANÁLISE IA — Due Diligence ──────────────
 async function ddAnalisarComIA(razao,cnpj,nivel,score,alertas,atencao,situacao,porte,capital,abertura){
-  const GEMINI_KEY='';// chave removida — exposta publicamente era risco; use a rota /gemini/analyze da Edge Function
-  const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key='+GEMINI_KEY;
   const panel=document.getElementById('dd-ai-result');
   if(!panel) return;
   panel.style.display='block';
@@ -4299,9 +4297,7 @@ Uma linha clara: APROVAR / APROVAR COM RESSALVAS / REPROVAR — com justificativ
 Seja direto, profissional e objetivo. Use linguagem executiva. Responda em português.`;
 
   try{
-    const r=await fetch(GEMINI_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.2,maxOutputTokens:1500}})});
-    const d=await r.json();
-    const txt=d.candidates?.[0]?.content?.parts?.[0]?.text||'Sem resposta';
+    const txt=(await geminiAnalisar(prompt,{temperature:0.2,maxOutputTokens:1500}))||'Sem resposta';
     // Format markdown to HTML
     const html=txt
       .replace(/## (.+)/g,'<h3 style="color:#4f46e5;font-size:.9rem;font-weight:800;margin:14px 0 6px;border-bottom:2px solid #e0e7ff;padding-bottom:4px">$1</h3>')
@@ -6311,8 +6307,6 @@ function rmDeleteUnit(idx) {
 async function aiAnalisarRiscos() {
   const btn=document.getElementById('btn-ai-risco');
   if(btn){btn.disabled=true;btn.textContent='⏳ Analisando...';}
-  const GEMINI_KEY='';// chave removida — exposta publicamente era risco; use a rota /gemini/analyze da Edge Function
-  const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key='+GEMINI_KEY;
   const riscos=(DB.riscos||[]);
   const lista=riscos.map(r=>`[${r.unidade||'?'}] ${r.desc} P:${r.prob} I:${r.impacto} Controle:${r.controle||'Nenhum'}`).join('\n');
   const prompt=`Você é especialista em gestão de riscos da Torre e Cia Supermercados.\nAnalise esta matriz de ${riscos.length} riscos e forneça:\n## Riscos Críticos\n## Lacunas nos Controles\n## 3 Recomendações Prioritárias\n## Score de Risco Geral: X/10\n\nRISCOS:\n${lista}\n\nResponda em português.`;
@@ -6321,15 +6315,12 @@ async function aiAnalisarRiscos() {
   panel.style.display='flex';
   panel.innerHTML='<div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:11px 16px;display:flex;align-items:center;justify-content:space-between"><span style="color:#fff;font-weight:700;font-size:.88rem">🤖 Análise de Risco — Gemini AI</span><button onclick="this.closest(\'#ai-risco-panel\').style.display=\'none\'" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:50%;width:24px;height:24px;cursor:pointer">✕</button></div><div id="ai-risco-body" style="padding:16px;background:#fff;overflow-y:auto;font-size:.85rem;line-height:1.7;flex:1">⏳ Analisando...</div>';
   try {
-    const r=await fetch(GEMINI_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0.3,maxOutputTokens:1200}})});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    const txt=d.candidates?.[0]?.content?.parts?.[0]?.text||'Sem resposta.';
+    const txt=await geminiAnalisar(prompt,{temperature:0.3,maxOutputTokens:1200});
     const body=document.getElementById('ai-risco-body');
-    if(body) body.innerHTML=txt.replace(/\n/g,'<br>').replace(/## (.*?)(<br>|$)/g,'<strong style="color:var(--primary);display:block;margin:10px 0 4px">$1</strong>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+    if(body) body.innerHTML=(txt||'Sem resposta.').replace(/\n/g,'<br>').replace(/## (.*?)(<br>|$)/g,'<strong style="color:var(--primary);display:block;margin:10px 0 4px">$1</strong>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
   } catch(e) {
     const body=document.getElementById('ai-risco-body');
-    if(body) body.innerHTML='<span style="color:var(--danger)">❌ '+e.message+'</span>';
+    if(body) body.innerHTML='<span style="color:var(--danger)">❌ '+escapeHtml(e.message)+'</span>';
   }
   if(btn){btn.disabled=false;btn.innerHTML='🤖 Avaliar com IA';}
 }
