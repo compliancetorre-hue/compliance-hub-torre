@@ -880,25 +880,3 @@ function rmDeleteUnit(idx) {
   rmUpdateRiscoModalUnits();
   rmUpdatePlanoModalUnits();
 }
-// ── AI análise de riscos — via Edge Function (geminiAnalisar em supabase.js).
-// A chave do Gemini nunca fica no frontend — só nos secrets do servidor.
-async function aiAnalisarRiscos() {
-  const btn=document.getElementById('btn-ai-risco');
-  if(btn){btn.disabled=true;btn.textContent='⏳ Analisando...';}
-  const riscos=(DB.riscos||[]);
-  const lista=riscos.map(r=>`[${r.unidade||'?'}] ${r.desc} P:${r.prob} I:${r.impacto} Controle:${r.controle||'Nenhum'}`).join('\n');
-  const prompt=`Você é especialista em gestão de riscos da Torre e Cia Supermercados.\nAnalise esta matriz de ${riscos.length} riscos e forneça:\n## Riscos Críticos\n## Lacunas nos Controles\n## 3 Recomendações Prioritárias\n## Score de Risco Geral: X/10\n\nRISCOS:\n${lista}\n\nResponda em português.`;
-  let panel=document.getElementById('ai-risco-panel');
-  if(!panel){panel=document.createElement('div');panel.id='ai-risco-panel';panel.style.cssText='position:fixed;bottom:20px;right:20px;width:480px;max-width:95vw;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.25);border-radius:12px;overflow:hidden;max-height:80vh;display:flex;flex-direction:column';document.body.appendChild(panel);}
-  panel.style.display='flex';
-  panel.innerHTML='<div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:11px 16px;display:flex;align-items:center;justify-content:space-between"><span style="color:#fff;font-weight:700;font-size:.88rem">🤖 Análise de Risco — Gemini AI</span><button onclick="this.closest(\'#ai-risco-panel\').style.display=\'none\'" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:50%;width:24px;height:24px;cursor:pointer">✕</button></div><div id="ai-risco-body" style="padding:16px;background:#fff;overflow-y:auto;font-size:.85rem;line-height:1.7;flex:1">⏳ Analisando...</div>';
-  try {
-    const txt=await geminiAnalisar(prompt,{temperature:0.3,maxOutputTokens:1200});
-    const body=document.getElementById('ai-risco-body');
-    if(body) body.innerHTML=(txt||'Sem resposta.').replace(/\n/g,'<br>').replace(/## (.*?)(<br>|$)/g,'<strong style="color:var(--primary);display:block;margin:10px 0 4px">$1</strong>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
-  } catch(e) {
-    const body=document.getElementById('ai-risco-body');
-    if(body) body.innerHTML='<span style="color:var(--danger)">❌ '+escapeHtml(e.message)+'</span>';
-  }
-  if(btn){btn.disabled=false;btn.innerHTML='🤖 Avaliar com IA';}
-}
