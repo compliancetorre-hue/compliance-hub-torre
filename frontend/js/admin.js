@@ -406,16 +406,22 @@ function renderLogs(filtro) {
 
     // Detalhes extras
     const det = l.detalhes || {};
-    const detStr = Object.entries(det).filter(([k])=>k!=='id').map(([k,v])=>`${k}: ${v}`).join(' · ');
+    // l.descricao, l.detalhes, l.nome e l.perfil vêm de campos de texto livre
+    // digitados por qualquer usuário logado (ex.: nome pesquisado no Due
+    // Diligence) — sem escapeHtml aqui, um usuário mal-intencionado injeta
+    // HTML/script que roda na sessão do ADMIN quando ele abre este painel
+    // (XSS armazenado com escalada de privilégio, já que quem lê o log é
+    // sempre admin).
+    const detStr = Object.entries(det).filter(([k])=>k!=='id').map(([k,v])=>`${escapeHtml(k)}: ${escapeHtml(String(v))}`).join(' · ');
 
     return `<div class="log-item">
       <div class="log-icon ${tipo.cls}">${tipo.icon}</div>
       <div class="log-meta">
-        <div class="log-title">${tipo.label} — <span style="color:var(--primary)">${modLabel}</span></div>
-        <div class="log-detail">${l.descricao}${detStr?'<span style="color:#94a3b8"> · '+detStr+'</span>':''}</div>
+        <div class="log-title">${escapeHtml(tipo.label)} — <span style="color:var(--primary)">${escapeHtml(modLabel)}</span></div>
+        <div class="log-detail">${escapeHtml(l.descricao)}${detStr?'<span style="color:#94a3b8"> · '+detStr+'</span>':''}</div>
         <span class="log-user" style="background:${cor}22;color:${cor}">
-          <span style="width:16px;height:16px;border-radius:50%;background:${cor};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800">${(l.nome||'?')[0]}</span>
-          ${l.nome} · ${l.perfil}
+          <span style="width:16px;height:16px;border-radius:50%;background:${cor};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800">${escapeHtml((l.nome||'?')[0])}</span>
+          ${escapeHtml(l.nome||'')} · ${escapeHtml(l.perfil||'')}
         </span>
       </div>
       <div class="log-time">${timeStr}</div>
