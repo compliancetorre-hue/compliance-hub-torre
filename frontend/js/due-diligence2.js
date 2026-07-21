@@ -809,13 +809,9 @@ async function dd2ExecutarComRetry(fns){
 
 async function dd2FetchBolsaFamilia(cpf){
   const meses=dd2BolsaMeses();
-  // DEBUG TEMPORÁRIO — remover depois de diagnosticar a falha do Novo Bolsa
-  // Família. Loga status e corpo de erro de cada chamada no console.
   const chamar=(rota,params)=>fetch(dd2PortalUrl(rota,params),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(10000)})
     .then(async r=>{
       if(!r.ok){
-        const corpo=await r.text().catch(()=>'(sem corpo)');
-        console.warn('[DD2-DEBUG]',rota,params,'status:',r.status,'corpo:',corpo);
         throw new Error('HTTP '+r.status);
       }
       return r.json();
@@ -849,7 +845,6 @@ async function dd2FetchBolsaFamilia(cpf){
       if(!r.ok){
         const corpo=await r.text().catch(()=>'');
         if(r.status===400&&corpo.includes('Erro ao executar a consulta'))return [];
-        console.warn('[DD2-DEBUG] bolsa-familia-novo',params,'status:',r.status,'corpo:',corpo);
         throw new Error('HTTP '+r.status);
       }
       respostas200++;
@@ -891,7 +886,6 @@ async function dd2FetchBolsaFamilia(cpf){
       if(!r.ok){
         const corpo=await r.text().catch(()=>'');
         if(r.status===400&&corpo.includes('Erro ao executar a consulta'))return [];
-        console.warn('[DD2-DEBUG] auxilio-brasil',params,'status:',r.status,'corpo:',corpo);
         throw new Error('HTTP '+r.status);
       }
       return r.json();
