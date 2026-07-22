@@ -87,6 +87,7 @@ function fbMakeCardEl(card, colId) {
       ${card.tag ? `<span class="fb-card-tag" style="background:#f0f4f8;color:var(--text-muted)">${card.tag}</span>` : ''}
       ${card.resp ? `<div class="fb-card-avatar" style="background:var(--primary);margin-left:auto">${card.resp.slice(0,2).toUpperCase()}</div>` : ''}
     </div>
+    ${card.criadoEm ? `<div class="fb-card-created">🕐 Criado em ${new Date(card.criadoEm).toLocaleDateString('pt-BR')}</div>` : ''}
   `;
 
   el.addEventListener('dragstart', () => { fbDragCard = card.id; fbDragSrcCol = colId; el.classList.add('dragging'); });
@@ -228,6 +229,7 @@ function fbSaveCard() {
     const idx = oldCol?.cards.findIndex(c => c.id === editId);
     if(idx !== undefined && idx > -1) {
       cardData.id = editId;
+      cardData.criadoEm = oldCol.cards[idx].criadoEm || null; // preserva a data original de criação
       if(oldColId === newColId) {
         oldCol.cards[idx] = cardData;
       } else {
@@ -238,6 +240,7 @@ function fbSaveCard() {
     }
   } else {
     cardData.id = 'fb' + (DB._ids.fbCard++);
+    cardData.criadoEm = new Date().toISOString();
     const col = board.cols.find(c => c.id === newColId);
     col?.cards.push(cardData);
   }
