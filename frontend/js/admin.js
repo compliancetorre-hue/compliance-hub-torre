@@ -866,12 +866,14 @@ function renderPermModal() {
 
     return `
     <div class="perm-user-card" id="perm-card-${user.email.replace('@','_').replace('.','_')}">
-      <div class="perm-avatar" style="background:${user.cor}">${user.avatar}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:.9rem">${user.nome}</div>
-        <div style="font-size:.75rem;color:var(--text-muted)">${user.email} · <em>${user.perfil}</em></div>
+      <div class="perm-user-row">
+        <div class="perm-avatar" style="background:${user.cor}">${user.avatar}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:.9rem">${user.nome}</div>
+          <div style="font-size:.75rem;color:var(--text-muted)">${user.email} · <em>${user.perfil}</em></div>
+        </div>
       </div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+      <div class="perm-user-actions">
         <button onclick="permExpandir('${user.email}')" class="btn btn-outline btn-sm" style="font-size:.75rem">
           ⚙️ Configurar módulos
         </button>
@@ -882,7 +884,7 @@ function renderPermModal() {
           🚫 Revogar tudo
         </button>
       </div>
-      <div id="perm-expand-${user.email.replace(/[@.]/g,'_')}" style="display:none;width:100%;margin-top:12px">
+      <div id="perm-expand-${user.email.replace(/[@.]/g,'_')}" style="display:none;margin-top:4px">
         ${renderPermModulos(user.email, perms)}
       </div>
     </div>`;
