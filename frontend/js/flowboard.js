@@ -72,6 +72,9 @@ function fbMakeCardEl(card, colId) {
 
   const prioColors = {Crítica:'#fde8ff',Alta:'#fee2e2',Média:'#fef3c7',Baixa:'#d1fae5'};
   const prioText = {Crítica:'#7e22ce',Alta:'#991b1b',Média:'#92400e',Baixa:'#065f46'};
+  // Tarja no topo do card indicando o nível de risco/prioridade
+  const prioStripe = {Crítica:'#7c3aed',Alta:'#ef4444',Média:'#f59e0b',Baixa:'#10b981'};
+  el.style.borderTopColor = prioStripe[card.prio] || 'var(--border)';
 
   const today = new Date().toISOString().split('T')[0];
   let dateClass = '';
