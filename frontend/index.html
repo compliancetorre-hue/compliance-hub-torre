@@ -20,8 +20,8 @@
     @keyframes loginPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
     .login-left{flex:1;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;padding:60px 48px;}
     .login-brand-wrap{max-width:400px;}
-    .login-shield{width:72px;height:72px;background:var(--accent);border-radius:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 36px rgba(0,196,154,.35);margin-bottom:32px;}
-    .login-shield svg{width:42px;height:42px;}
+    .login-shield{width:88px;height:88px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 36px rgba(0,0,0,.25);margin-bottom:32px;}
+    .login-shield img{width:58px;height:58px;object-fit:contain;}
     .login-brand-name{font-size:2.6rem;font-weight:800;color:#fff;margin:0 0 6px;letter-spacing:-.5px;line-height:1.1;}
     .login-brand-sub{font-size:.85rem;color:rgba(255,255,255,.5);margin:0 0 20px;font-weight:500;letter-spacing:.6px;text-transform:uppercase;}
     .login-brand-desc{font-size:.95rem;color:rgba(255,255,255,.6);line-height:1.7;margin:0 0 36px;}
@@ -33,7 +33,7 @@
     .login-box{width:100%;background:#fff;border-radius:20px;padding:40px 36px 32px;box-shadow:0 20px 60px rgba(15,45,74,.12);}
     .login-box-header{display:flex;align-items:center;gap:14px;margin-bottom:28px;padding-bottom:24px;border-bottom:1.5px solid var(--border);}
     .login-box-icon{width:42px;height:42px;background:var(--primary);border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-    .login-box-icon svg{width:25px;height:25px;}
+    .login-box-icon img{width:27px;height:27px;object-fit:contain;}
     .login-box-brand{font-size:.95rem;font-weight:800;color:var(--primary);}
     .login-box-sub{font-size:.68rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
     .login-headline{font-size:1.5rem;font-weight:800;color:var(--primary);margin:0 0 6px;letter-spacing:-.3px;}
@@ -71,7 +71,7 @@
   <div class="login-left">
     <div class="login-brand-wrap">
       <div class="login-shield">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7v5c0 5.25 3.75 10.05 9 11.25C17.25 22.05 21 17.25 21 12V7L12 2z" fill="#fff" fill-opacity=".95"/><path d="M9 12l2 2 4-4" stroke="#00c49a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <img src="assets/img/logo-torre-icon-white.png" alt="Torre Supermercados">
       </div>
       <h1 class="login-brand-name">Compliance Hub</h1>
       <p class="login-brand-sub">Torre e Cia Supermercados</p>
@@ -87,7 +87,7 @@
     <div class="login-box">
       <div class="login-box-header">
         <div class="login-box-icon">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7v5c0 5.25 3.75 10.05 9 11.25C17.25 22.05 21 17.25 21 12V7L12 2z" fill="#fff" fill-opacity=".9"/><path d="M9 12l2 2 4-4" stroke="#0f2d4a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <img src="assets/img/logo-torre-icon-white.png" alt="Torre Supermercados">
         </div>
         <div>
           <div class="login-box-brand">Compliance</div>
@@ -132,10 +132,7 @@
 <div id="sidebar">
   <div class="logo">
     <div class="logo-icon">
-      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2L3 7v5c0 5.25 3.75 10.05 9 11.25C17.25 22.05 21 17.25 21 12V7L12 2z" fill="#fff" fill-opacity=".9"/>
-        <path d="M9 12l2 2 4-4" stroke="#00c49a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
+      <img src="assets/img/logo-torre-icon-white.png" alt="Torre Supermercados">
     </div>
     <div>
       <div class="brand" data-editable="brand-nome">Compliance Hub</div>
