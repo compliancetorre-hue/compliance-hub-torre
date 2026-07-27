@@ -86,6 +86,32 @@ function dnToRow(d) {
     denunciante_nome: d.nome||'', denunciante_tel: d.tel||'', denunciante_email: d.email||''
   };
 }
+// ── Map DB.denunciasAls item → Supabase row (tabela denuncias_als)
+function alsToRow(d) {
+  return {
+    id: d.id, proto: d.proto, nome: d.nome||'', telefone: d.telefone||'', email: d.email||'',
+    setor: d.setor||'', tipos: d.tipos||[], tipo_outro: d.tipoOutro||'',
+    descricao: d.descricao||'', denunciado: d.denunciado||'', onde: d.onde||'',
+    quando: d.quando||null, horario: d.horario||'', testemunhas: d.testemunhas||'',
+    consentimento: d.consentimento!==false, status: d.status||'Aberta',
+    resp: d.resp||'', obs: d.obs||'',
+    resposta_denunciante: d.resposta||'', resposta_em: d.respostaEm||null
+  };
+}
+function rowToAls(r) {
+  let quandoStr = r.quando||'';
+  if(quandoStr && quandoStr.includes('T')) quandoStr = quandoStr.split('T')[0];
+  return {
+    id: r.id, proto: r.proto, nome: r.nome||'', telefone: r.telefone||'', email: r.email||'',
+    setor: r.setor||'', tipos: r.tipos||[], tipoOutro: r.tipo_outro||'',
+    descricao: r.descricao||'', denunciado: r.denunciado||'', onde: r.onde||'',
+    quando: quandoStr, horario: r.horario||'', testemunhas: r.testemunhas||'',
+    consentimento: r.consentimento!==false, status: r.status||'Aberta',
+    resp: r.resp||'', obs: r.obs||'', criadoEm: r.criado_em||'',
+    resposta: r.resposta_denunciante||'', respostaEm: r.resposta_em||null
+  };
+}
+
 function rowToDn(r) {
   let dataStr = r.data||'';
   if(dataStr && dataStr.includes('T')) dataStr = dataStr.split('T')[0];
@@ -108,12 +134,13 @@ async function loadFromSupabase() {
     const allData = await (async () => {
       const token = getAppToken();
       if(!token) throw new Error('sessão inválida (sem token de servidor)');
-      const [filiaisR, riscosR, controlesR, planosR, denunciasR, fbR, agendaR, rmR, settingsR] = await Promise.all([
+      const [filiaisR, riscosR, controlesR, planosR, denunciasR, denunciasAlsR, fbR, agendaR, rmR, settingsR] = await Promise.all([
         _edgeGet('filiais?order=id'),
         _edgeGet('riscos?order=id'),
         _edgeGet('controles?order=id'),
         _edgeGet('planos?order=id'),
         _edgeGet('denuncias?order=id'),
+        _edgeGet('denuncias_als?order=id').catch(()=>[]),
         // A Edge Function faz .eq(chave,valor) puro por parâmetro — não
         // entende a sintaxe "campo=eq.valor" do PostgREST. Usar "id=eq.main"
         // aqui procurava literalmente por um id igual à string "eq.main",
@@ -128,11 +155,11 @@ async function loadFromSupabase() {
       ]);
       return {
         filiais: filiaisR||[], riscos: riscosR||[], controles: controlesR||[],
-        planos: planosR||[], denRows: denunciasR||[], fbRows: fbR||[],
+        planos: planosR||[], denRows: denunciasR||[], denAlsRows: denunciasAlsR||[], fbRows: fbR||[],
         rmPlanos: rmR||[], agenda: agendaR||[], settings: settingsR||[]
       };
     })();
-    const { filiais, riscos, controles, planos, denRows, fbRows } = allData;
+    const { filiais, riscos, controles, planos, denRows, denAlsRows, fbRows } = allData;
     // Restore extra data from load-all
     if(allData.rmPlanos?.length > 0) DB.rmPlanos = allData.rmPlanos.map(p=>({id:p.id,riscoId:p.risco_id,titulo:p.titulo,resp:p.resp||'',prazo:p.prazo||'',tipo:p.tipo||'Preventiva',status:p.status||'Não Iniciado',prog:p.prog||0,andamento:p.andamento||''}));
     if(allData.agenda?.length > 0) DB.agenda = allData.agenda.map(e=>({id:e.id,titulo:e.titulo,tipo:e.tipo||'Outro',data:e.data,hora:e.hora||'',horaFim:e.hora_fim||'',local:e.local||'',resp:e.resp||'',desc:e.descricao||'',lembrete:e.lembrete||'',recorrencia:e.recorrencia||'nenhuma'}));
@@ -184,6 +211,11 @@ async function loadFromSupabase() {
       DB.denuncias = denRows.map(rowToDn);
     }
 
+    // ── DENÚNCIAS ALS: tabela separada, Supabase é a única fonte de verdade
+    if(denAlsRows.length > 0) {
+      DB.denunciasAls = denAlsRows.map(rowToAls);
+    }
+
     // ── FLOWBOARD
     if(fbRows && fbRows[0] && fbRows[0].data) {
       const saved = fbRows[0].data;
@@ -200,6 +232,7 @@ async function loadFromSupabase() {
     DB._ids.ctrl    = Math.max(DB._ids.ctrl||1,    maxId(DB.controles));
     DB._ids.plano   = Math.max(DB._ids.plano||1,   maxId(DB.planos));
     DB._ids.dn      = Math.max(DB._ids.dn||1,      maxId(DB.denuncias));
+    DB._ids.dnAls   = Math.max(DB._ids.dnAls||1,   maxId(DB.denunciasAls));
     DB._ids.agenda  = Math.max(DB._ids.agenda||1,  maxId(DB.agenda));
 
     saveLocalCache();
@@ -261,6 +294,23 @@ async function sbDeleteDenuncia(id) {
     await sbDelete('denuncias', id);
     auditLog('delete','denuncias', `Denúncia ID ${id} excluída`, {id});
   } catch(e) { console.warn('sbDeleteDenuncia:', e.message); }
+}
+// Canal de Denúncia ALS — tabela separada (denuncias_als). O INSERT público
+// é feito pela Edge Function "denuncia-als-publica" (sem login); daqui só
+// atualizamos status/responsável/observações internas (edição autenticada).
+async function sbSaveDenunciaAls(d) {
+  if(!USE_SUPABASE) return;
+  try {
+    await sbUpsert('denuncias_als', alsToRow(d));
+    auditLog('update','denuncias_als', `Denúncia ALS ${d.proto||d.id} — status: ${d.status||''}`, {proto:d.proto, status:d.status});
+  } catch(e) { console.warn('sbSaveDenunciaAls:', e.message); }
+}
+async function sbDeleteDenunciaAls(id) {
+  if(!USE_SUPABASE) return;
+  try {
+    await sbDelete('denuncias_als', id);
+    auditLog('delete','denuncias_als', `Denúncia ALS ID ${id} excluída`, {id});
+  } catch(e) { console.warn('sbDeleteDenunciaAls:', e.message); }
 }
 async function sbSaveFilial(f) {
   if(!USE_SUPABASE) return;
@@ -386,6 +436,7 @@ function saveLocalCache() {
       filiais:DB.filiais, riscos:DB.riscos, rmPlanos:DB.rmPlanos||[],
       rmUnits:RM_UNITS,
       controles:DB.controles, planos:DB.planos, denuncias:DB.denuncias,
+      denunciasAls:DB.denunciasAls||[],
       fbBoards:DB.fbBoards, agenda:DB.agenda||[], _ids:DB._ids, _savedAt:new Date().toISOString()
     }));
   } catch(e) { console.warn('saveLocalCache:', e); }
@@ -406,6 +457,7 @@ function loadLocalCache() {
     if(s.controles && s.controles.length > 0) DB.controles = s.controles;
     if(s.planos && s.planos.length > 0) DB.planos = s.planos;
     if(s.denuncias && s.denuncias.length > 0) DB.denuncias = s.denuncias;
+    if(s.denunciasAls && s.denunciasAls.length > 0) DB.denunciasAls = s.denunciasAls;
     if(s.fbBoards) DB.fbBoards = s.fbBoards;
     if(s.agenda && s.agenda.length > 0) DB.agenda = s.agenda;
     if(s._ids) Object.keys(s._ids).forEach(k => { if((s._ids[k]||0) > (DB._ids[k]||0)) DB._ids[k] = s._ids[k]; });
