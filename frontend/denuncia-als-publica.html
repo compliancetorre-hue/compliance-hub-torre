@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Canal de Denúncia ALS · Torre e Cia Supermercados</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family:'DM Sans',sans-serif; margin:0; min-height:100vh;
+    background:var(--primary);
+    display:flex; align-items:flex-start; justify-content:center;
+    padding:40px 16px 60px;
+  }
+  .als-wrap { width:100%; max-width:640px; }
+  .als-brand { display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+  .als-brand-icon { width:46px; height:46px; border-radius:12px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .als-brand-icon img { width:32px; height:32px; object-fit:contain; }
+  .als-brand-name { color:#fff; font-weight:800; font-size:1.05rem; letter-spacing:-.2px; }
+  .als-brand-sub { color:rgba(255,255,255,.55); font-size:.72rem; font-weight:600; text-transform:uppercase; letter-spacing:.6px; }
+  .als-card { background:#fff; border-radius:18px; padding:32px 30px; box-shadow:0 24px 70px rgba(0,0,0,.3); }
+  .als-title { font-size:1.4rem; font-weight:800; color:var(--primary); margin:0 0 12px; }
+  .als-intro { font-size:.85rem; color:var(--text-muted); line-height:1.65; margin:0 0 10px; }
+  .als-intro strong { color:var(--text); }
+  .als-priv { font-size:.78rem; color:var(--text-muted); background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:26px; }
+  .als-q { margin-bottom:22px; }
+  .als-q > label.q-label { display:block; font-size:.86rem; font-weight:700; color:var(--text); margin-bottom:8px; }
+  .als-q .q-opt { font-size:.72rem; font-weight:600; color:var(--text-muted); text-transform:none; letter-spacing:0; }
+  .als-req { color:var(--danger); margin-left:2px; }
+  .als-q input[type=text], .als-q input[type=email], .als-q input[type=date], .als-q textarea {
+    width:100%; padding:11px 14px; border:1px solid var(--border); border-radius:8px;
+    font-size:.92rem; font-family:inherit; color:var(--text); background:#fff; transition:border .15s;
+  }
+  .als-q input[type=text]:focus, .als-q input[type=email]:focus, .als-q input[type=date]:focus, .als-q textarea:focus {
+    outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,196,154,.15);
+  }
+  .als-q textarea { resize:vertical; line-height:1.6; }
+  .als-q textarea#q-descricao { min-height:160px; }
+  .als-q textarea#q-testemunhas { min-height:80px; }
+  .chk-list { display:flex; flex-direction:column; gap:8px; }
+  .chk-item { display:flex; align-items:center; gap:9px; padding:9px 12px; border:1px solid var(--border); border-radius:8px; cursor:pointer; font-size:.87rem; transition:all .15s; }
+  .chk-item:hover { border-color:var(--accent); background:#f0fdf9; }
+  .chk-item input { width:16px; height:16px; accent-color:var(--accent); flex-shrink:0; }
+  .chk-outro { display:flex; align-items:center; gap:9px; padding:9px 12px; border:1px solid var(--border); border-radius:8px; }
+  .chk-outro input[type=checkbox] { width:16px; height:16px; accent-color:var(--accent); flex-shrink:0; }
+  .chk-outro input[type=text] { flex:1; border:none; outline:none; font-family:inherit; font-size:.87rem; padding:2px 0; }
+  .consent-box { display:flex; align-items:flex-start; gap:10px; padding:14px; border:1.5px solid var(--border); border-radius:10px; background:#f8fafc; }
+  .consent-box input { width:18px; height:18px; margin-top:2px; accent-color:var(--accent); flex-shrink:0; }
+  .consent-box label { font-size:.85rem; color:var(--text); cursor:pointer; }
+  .als-honeypot { position:absolute; left:-9999px; opacity:0; height:0; width:0; overflow:hidden; }
+  .als-submit { width:100%; padding:14px; font-size:.95rem; margin-top:6px; }
+  .als-error { display:none; margin-top:14px; padding:12px 14px; background:#fef2f2; border:1px solid #fecaca; color:#b91c1c; border-radius:8px; font-size:.84rem; }
+  .als-success { display:none; text-align:center; padding:20px 6px; }
+  .als-success .ico { font-size:2.6rem; margin-bottom:10px; }
+  .als-success h2 { color:var(--primary); font-size:1.25rem; margin:0 0 10px; }
+  .als-success p { color:var(--text-muted); font-size:.88rem; line-height:1.6; margin:0 0 18px; }
+  .als-proto { font-family:'DM Mono',monospace; font-size:1.3rem; font-weight:700; color:var(--primary); background:#f0fdf9; border:1.5px dashed var(--accent); border-radius:10px; padding:14px; letter-spacing:1px; margin-bottom:18px; }
+  .als-footer-note { text-align:center; color:rgba(255,255,255,.4); font-size:.72rem; margin-top:20px; }
+  .als-prazo { font-size:.8rem; color:#065f46; background:#f0fdf9; border:1px solid #6ee7b7; border-radius:8px; padding:10px 12px; margin-bottom:18px; text-align:left; }
+  .als-tabs { display:flex; gap:8px; margin-bottom:22px; }
+  .als-tab { flex:1; padding:10px; border-radius:8px; border:1px solid var(--border); background:#f8fafc; color:var(--text-muted); font-weight:700; font-size:.84rem; cursor:pointer; font-family:inherit; transition:all .15s; }
+  .als-tab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .als-consulta { display:none; }
+  .als-consulta-form { display:flex; gap:8px; margin-bottom:18px; }
+  .als-consulta-form input { flex:1; padding:11px 14px; border:1px solid var(--border); border-radius:8px; font-size:.92rem; font-family:'DM Mono',monospace; text-transform:uppercase; }
+  .als-consulta-result { display:none; border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .als-consulta-result .row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:.86rem; }
+  .als-consulta-result .lbl { color:var(--text-muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+  .als-resposta-box { margin-top:10px; padding:12px 14px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; font-size:.86rem; line-height:1.6; white-space:pre-wrap; }
+  .als-sem-resposta { margin-top:10px; padding:12px 14px; background:#fffbeb; border:1px solid #fcd34d; border-radius:8px; font-size:.83rem; color:#92400e; }
+</style>
+</head>
+<body>
+<div class="als-wrap">
+
+  <div class="als-brand">
+    <div class="als-brand-icon"><img src="assets/img/logo-torre-icon-white.png" alt="Torre"></div>
+    <div>
+      <div class="als-brand-name">Torre e Cia Supermercados</div>
+      <div class="als-brand-sub">Canal de Denúncia · ALS</div>
+    </div>
+  </div>
+
+  <div class="als-card">
+
+    <div class="als-tabs">
+      <button type="button" class="als-tab active" id="tab-btn-registrar" onclick="mostrarAba('registrar')">📝 Registrar Denúncia</button>
+      <button type="button" class="als-tab" id="tab-btn-consultar" onclick="mostrarAba('consultar')">🔎 Consultar Protocolo</button>
+    </div>
+
+    <div id="als-form-view">
+      <h1 class="als-title">Canal de Denúncia — ALS</h1>
+      <p class="als-intro">
+        Este canal foi criado para receber denúncias de forma <strong>segura, sigilosa e anônima</strong>.
+        Todas as informações prestadas serão tratadas com seriedade e confidencialidade.
+        Você pode se identificar se desejar, mas <strong>não é obrigatório</strong>. Quanto mais informações,
+        mais fácil e ágil se torna a apuração.
+      </p>
+      <div class="als-priv">
+        🔒 Este formulário não coleta automaticamente seus dados — nome, telefone e e-mail só são
+        registrados se você mesmo os preencher abaixo.
+      </div>
+      <div class="als-prazo">
+        ⏱️ <strong>Prazo de resposta: até 90 dias corridos</strong> a partir do registro da denúncia.
+        Guarde o protocolo gerado ao final para acompanhar o andamento na aba "Consultar Protocolo".
+      </div>
+
+      <form id="als-form" novalidate>
+        <input type="text" name="website" id="als-honeypot" class="als-honeypot" tabindex="-1" autocomplete="off">
+
+        <div class="als-q">
+          <label class="q-label">1. Nome <span class="q-opt">(opcional)</span></label>
+          <input type="text" id="q-nome" placeholder="Seu nome completo">
+        </div>
+
+        <div class="als-q">
+          <label class="q-label">2. Número de telefone <span class="q-opt">(opcional)</span></label>
+          <input type="text" id="q-telefone" placeholder="(00) 00000-0000">
+        </div>
+
+        <div class="als-q">
+          <label class="q-label">3. Endereço de e-mail <span class="q-opt">(opcional)</span></label>
+          <input type="email" id="q-email" placeholder="seu@email.com">
+        </div>
+
+        <div class="als-q">
+          <label class="q-label">4. Setor?</label>
+          <input type="text" id="q-setor" placeholder="Ex: Frente de loja, Financeiro...">
+        </div>
+
+        <div class="als-q">
+          <label class="q-label">5. Tipo de Denúncia<span class="als-req">*</span></label>
+          <div class="chk-list" id="q-tipos">
+            <label class="chk-item"><input type="checkbox" value="Assédio moral"> Assédio moral</label>
+            <label class="chk-item"><input type="checkbox" value="Assédio sexual"> Assédio sexual</label>
+            <label class="chk-item"><input type="checkbox" value="Discriminação"> Discriminação</label>
+            <label class="chk-item"><input type="checkbox" value="Fraude ou desvio de valores"> Fraude ou desvio de valores</label>
+            <label class="chk-item"><input type="checkbox" value="Roubo/furto"> Roubo/furto</label>
+            <label class="chk-item"><input type="checkbox" value="Irregularidades trabalhistas"> Irregularidades trabalhistas</label>
+            <label class="chk-item"><input type="checkbox" value="Conduta antiética"> Conduta antiética</label>
+            <div class="chk-outro">
+              <input type="checkbox" id="q-tipo-outro-chk">
+              <input type="text" id="q-tipo-outro-txt" placeholder="Outra (especifique)">
+            </div>
+          </div>
+        </div>
+
+        <div class="als-q">
+          <label class="q-label">6. Descrição do Fato<span class="als-req">*</span></label>
+          <textarea id="q-descricao" rows="7" placeholder="Descreva detalhadamente o ocorrido (mínimo 20 caracteres)..."></textarea>
+        </div>
+
+        <div class="als-q">
+          <label class="q-label">7. Nome do Denunciado?<span class="als-req">*</span></label>
+          <input type="text" id="q-denunciado" placeholder="Nome da pessoa denunciada">
+        </div>
+
+        <div class="als-q">
+          <label class="q-label">8. Onde aconteceu?</label>
+          <input type="text" id="q-onde" placeholder="Ex: Loja Centro, depósito, escritório...">
+        </div>
+
+        <div class="als-q">
+          <label class="q-label">9. Quando aconteceu?</label>
+          <input type="date" id="q-quando">
+        </div>
+
+        <div class="als-q">
+          <label class="q-label">10. Horário aproximado do ocorrido?</label>
+          <input type="text" id="q-horario" placeholder="Ex: 14h30, fim da tarde...">
+        </div>
+
+        <div class="als-q">
+          <label class="q-label">11. Testemunhas <span class="q-opt">(se houver)</span></label>
+          <textarea id="q-testemunhas" rows="3" placeholder="Nomes ou descrição de possíveis testemunhas..."></textarea>
+        </div>
+
+        <div class="als-q">
+          <label class="q-label">12. Consentimento<span class="als-req">*</span></label>
+          <div class="consent-box">
+            <input type="checkbox" id="q-consentimento">
+            <label for="q-consentimento">Confirmo que as informações fornecidas são verdadeiras.</label>
+          </div>
+        </div>
+
+        <div class="als-error" id="als-error"></div>
+        <button type="submit" class="btn btn-accent als-submit" id="als-submit-btn">Enviar Denúncia</button>
+      </form>
+    </div>
+
+    <div class="als-success" id="als-success-view">
+      <div class="ico">✅</div>
+      <h2>Denúncia registrada</h2>
+      <p>Guarde o <strong>protocolo</strong> e a <strong>data de hoje</strong> — as duas informações juntas são
+      necessárias para consultar o andamento na aba "Consultar Protocolo". O prazo de resposta é de até
+      <strong>90 dias corridos</strong> a partir de agora.</p>
+      <div class="als-proto" id="als-proto-text">DN-ALS-0000</div>
+      <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:18px">Data de registro: <strong id="als-proto-data"></strong></div>
+      <button type="button" class="btn btn-outline" onclick="location.reload()">Registrar outra denúncia</button>
+    </div>
+
+    <div class="als-consulta" id="als-consulta-view">
+      <h1 class="als-title">Consultar Denúncia</h1>
+      <p class="als-intro">
+        Informe o protocolo <strong>e a data em que você registrou a denúncia</strong> para ver o status
+        atual e se já há resposta do time de compliance. Pedimos os dois para garantir que só quem
+        denunciou consiga consultar — o protocolo sozinho não é suficiente.
+      </p>
+      <div class="als-q">
+        <label class="q-label">Protocolo</label>
+        <input type="text" id="q-consulta-proto" placeholder="Ex: DN-ALS-2026-001">
+      </div>
+      <div class="als-q">
+        <label class="q-label">Data em que registrou a denúncia</label>
+        <input type="date" id="q-consulta-data">
+      </div>
+      <div class="als-consulta-form">
+        <button type="button" class="btn btn-accent als-submit" id="consulta-btn" onclick="consultarProtocolo()">Consultar</button>
+      </div>
+      <div class="als-error" id="consulta-error"></div>
+
+      <div class="als-consulta-result" id="consulta-result">
+        <div class="row"><span class="lbl">Protocolo</span><strong id="res-proto"></strong></div>
+        <div class="row"><span class="lbl">Status</span><span id="res-status"></span></div>
+        <div class="row"><span class="lbl">Registrada em</span><span id="res-criado"></span></div>
+        <div class="row"><span class="lbl">Prazo de resposta (90 dias)</span><span id="res-prazo"></span></div>
+        <div id="res-resposta-wrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="als-footer-note">Torre e Cia Supermercados · Canal de Denúncia ALS</div>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://qhtkuarlsjlnfkzfmxwa.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFodGt1YXJsc2psbmZremZteHdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDkwMTQsImV4cCI6MjA5MTE4NTAxNH0.5rw_iN9_-IYyNlqaOAXdy5wpmrOcvVO-QAUEQBgl3eA';
+  const ALS_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/denuncia-als-publica`;
+  const ALS_CONSULTA_URL = `${SUPABASE_URL}/functions/v1/denuncia-als-consulta`;
+
+  function mostrarAba(aba) {
+    document.getElementById('als-form-view').style.display = aba === 'registrar' ? 'block' : 'none';
+    document.getElementById('als-consulta-view').style.display = aba === 'consultar' ? 'block' : 'none';
+    document.getElementById('als-success-view').style.display = 'none';
+    document.getElementById('tab-btn-registrar').classList.toggle('active', aba === 'registrar');
+    document.getElementById('tab-btn-consultar').classList.toggle('active', aba === 'consultar');
+  }
+
+  function formatDataBr(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR');
+  }
+
+  async function consultarProtocolo() {
+    const proto = document.getElementById('q-consulta-proto').value.trim();
+    const dataRegistro = document.getElementById('q-consulta-data').value;
+    const errBox = document.getElementById('consulta-error');
+    const resultBox = document.getElementById('consulta-result');
+    const btn = document.getElementById('consulta-btn');
+    errBox.style.display = 'none';
+    resultBox.style.display = 'none';
+
+    if (!proto || !dataRegistro) {
+      errBox.textContent = '⚠️ Informe o protocolo e a data de registro.';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Consultando...';
+    try {
+      const r = await fetch(ALS_CONSULTA_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON,
+          'Authorization': 'Bearer ' + SUPABASE_ANON,
+        },
+        body: JSON.stringify({ proto, dataRegistro }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'Protocolo não encontrado.');
+
+      document.getElementById('res-proto').textContent = data.proto;
+      document.getElementById('res-status').textContent = data.status;
+      document.getElementById('res-criado').textContent = formatDataBr(data.criadoEm);
+      document.getElementById('res-prazo').textContent =
+        `${formatDataBr(data.prazoLimite)} (${data.diasRestantes} dia(s) restante(s))`;
+
+      const respostaWrap = document.getElementById('res-resposta-wrap');
+      if (data.resposta) {
+        respostaWrap.innerHTML = `
+          <div class="lbl" style="margin-top:12px;margin-bottom:6px">Resposta do time de compliance (${formatDataBr(data.respostaEm)})</div>
+          <div class="als-resposta-box">${data.resposta.replace(/</g,'&lt;')}</div>`;
+      } else {
+        respostaWrap.innerHTML = `<div class="als-sem-resposta">⏳ Ainda não há resposta registrada para esta denúncia. O prazo máximo é de 90 dias corridos a partir do registro.</div>`;
+      }
+
+      resultBox.style.display = 'block';
+    } catch (e) {
+      errBox.textContent = '⚠️ ' + (e.message || 'Falha de conexão. Tente novamente em instantes.');
+      errBox.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Consultar';
+    }
+  }
+
+  const form = document.getElementById('als-form');
+  const errBox = document.getElementById('als-error');
+  const submitBtn = document.getElementById('als-submit-btn');
+
+  function showError(msg) {
+    errBox.textContent = '⚠️ ' + msg;
+    errBox.style.display = 'block';
+    errBox.scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    errBox.style.display = 'none';
+
+    const tipos = Array.from(document.querySelectorAll('#q-tipos input[type=checkbox][value]'))
+      .filter(c => c.checked).map(c => c.value);
+    const tipoOutroChecked = document.getElementById('q-tipo-outro-chk').checked;
+    const tipoOutroTxt = document.getElementById('q-tipo-outro-txt').value.trim();
+    if (tipoOutroChecked && tipoOutroTxt) tipos.push('Outra');
+
+    const descricao = document.getElementById('q-descricao').value.trim();
+    const denunciado = document.getElementById('q-denunciado').value.trim();
+    const consentimento = document.getElementById('q-consentimento').checked;
+
+    if (tipos.length === 0) return showError('Selecione ao menos um "Tipo de Denúncia".');
+    if (descricao.length < 20) return showError('"Descrição do Fato" deve ter ao menos 20 caracteres.');
+    if (!denunciado) return showError('"Nome do Denunciado?" é obrigatório.');
+    if (!consentimento) return showError('É necessário confirmar o consentimento para enviar.');
+
+    const payload = {
+      website: document.getElementById('als-honeypot').value, // honeypot
+      nome: document.getElementById('q-nome').value.trim(),
+      telefone: document.getElementById('q-telefone').value.trim(),
+      email: document.getElementById('q-email').value.trim(),
+      setor: document.getElementById('q-setor').value.trim(),
+      tipos,
+      tipoOutro: tipoOutroChecked ? tipoOutroTxt : '',
+      descricao,
+      denunciado,
+      onde: document.getElementById('q-onde').value.trim(),
+      quando: document.getElementById('q-quando').value,
+      horario: document.getElementById('q-horario').value.trim(),
+      testemunhas: document.getElementById('q-testemunhas').value.trim(),
+      consentimento,
+    };
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Enviando...';
+    try {
+      const r = await fetch(ALS_FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON,
+          'Authorization': 'Bearer ' + SUPABASE_ANON,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'Não foi possível enviar a denúncia.');
+
+      document.getElementById('als-form-view').style.display = 'none';
+      document.getElementById('als-proto-text').textContent = data.protocolo || '—';
+      document.getElementById('als-proto-data').textContent = new Date().toLocaleDateString('pt-BR');
+      document.getElementById('als-success-view').style.display = 'block';
+    } catch (e) {
+      showError(e.message || 'Falha de conexão. Tente novamente em instantes.');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Enviar Denúncia';
+    }
+  });
+</script>
+</body>
+</html>
