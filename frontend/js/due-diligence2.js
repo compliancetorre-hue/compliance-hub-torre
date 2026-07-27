@@ -89,6 +89,10 @@ function dd2HTML(){return `
 .dd2-tl-date{font-size:.72rem;color:#64748b;font-weight:600}
 .dd2-tl-text{font-size:.85rem;font-weight:600;margin-top:2px}
 .dd2-tl-sub{font-size:.78rem;color:#64748b;margin-top:1px}
+.dd2-jud-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.dd2-jud-tab{padding:7px 14px;border-radius:20px;border:1px solid #e2e8f0;background:#f0f4f8;color:#64748b;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
+.dd2-jud-tab.active{background:#0f2d4a;color:#fff;border-color:#0f2d4a}
+.dd2-jud-subtitle{font-weight:700;color:#0f2d4a;margin:16px 0 8px;font-size:.88rem;display:flex;align-items:center;gap:6px}
 .dd2-checklist{display:flex;flex-direction:column;gap:8px}
 .dd2-chk-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:#f0f4f8;font-size:.85rem}
 .dd2-chk-item.ok{border-left:4px solid #22c55e}
@@ -202,7 +206,14 @@ function dd2HTML(){return `
     </div>
     <div class="dd2-card" id="dd2-sec-judicial">
       <div class="dd2-card-title">&#9878; Processos Judiciais (DJEN — CNJ)</div>
+      <div class="dd2-jud-tabs">
+        <button type="button" class="dd2-jud-tab active" id="dd2-jud-tab-recentes" onclick="dd2AbaJudicial('recentes')">&#128240; Comunicações Recentes (3 dias)</button>
+        <button type="button" class="dd2-jud-tab" id="dd2-jud-tab-empresa" onclick="dd2AbaJudicial('empresa')">&#127970; Processos da Empresa</button>
+        <button type="button" class="dd2-jud-tab" id="dd2-jud-tab-socios" onclick="dd2AbaJudicial('socios')">&#128101; Processos dos Sócios</button>
+      </div>
       <div id="dd2-judicial-content"><div class="dd2-loading">&#9203; Consultando o Diário de Justiça Eletrônico Nacional...</div></div>
+      <div id="dd2-judicial-empresa-content" style="display:none"></div>
+      <div id="dd2-judicial-socios-content" style="display:none"></div>
     </div>
     <div class="dd2-card" id="dd2-sec-sancoes">
       <div class="dd2-card-title">&#128171; Sanções e Restrições (CEIS, CNEP, Leniência, CEPIM, CEAF, TCU, Internacional)</div>
@@ -283,6 +294,16 @@ let dd2BolsaData = [];
 // pra dd2RenderScore poder classificar cada comunicação por polo (réu vs
 // autor) sem precisar re-buscar quem foi pesquisado.
 let dd2JudicialNomesAlvo = [];
+// Contexto (nome/documento/tipo/sócios) da última busca judicial — guardado
+// pra permitir carregar as abas "Processos da Empresa"/"dos Sócios" (busca
+// com janela de datas ampla, sob demanda) sem repetir os parâmetros.
+let dd2JudicialCtx = null;
+// Cache da busca "todos os processos" (janela de datas ampla) — feita uma
+// única vez sob demanda (lazy, ao clicar na aba) pra não dobrar o consumo
+// do rate limit do DJEN (20 req/janela) toda vez que a Aba de Comunicações
+// Recentes já roda a busca padrão de 3 dias.
+let dd2TodosProcessosData = null;
+let dd2TodosProcessosCarregando = false;
 // Investigação individual dos sócios (QSA): um item por sócio com os
 // achados de cada base — alimenta o card próprio, o score e o checklist.
 let dd2SociosData = [];
@@ -362,6 +383,10 @@ async function dd2Iniciar(){
   document.getElementById('dd2-sec-bolsa').style.display=scBolsa?'block':'none';
   dd2SetProgress(5);
   dd2JudicialData=[];dd2CadastralData=null;dd2SancoesData={ceis:[],cnep:[],leniencia:[],cepim:[],ceaf:[],tcu:[],internacional:[]};dd2PepData=[];dd2PepFalhou=false;dd2MidiaData=[];dd2MidiaFalhou=false;dd2DiariosData=[];dd2BolsaData=[];dd2SociosData=[];dd2SociosFalhou=false;dd2JudicialNomesAlvo=[];dd2ContratosData=[];dd2ContratosFalhou=false;
+  dd2JudicialCtx=null;dd2TodosProcessosData=null;dd2TodosProcessosCarregando=false;
+  if(document.getElementById('dd2-jud-tab-recentes')) dd2AbaJudicial('recentes');
+  const elEmp=document.getElementById('dd2-judicial-empresa-content'), elSoc=document.getElementById('dd2-judicial-socios-content');
+  if(elEmp) elEmp.innerHTML=''; if(elSoc) elSoc.innerHTML='';
   const tasks=[];
 
   // Failsafe: se alguma chamada travar inesperadamente, libera a tela mesmo assim
@@ -996,6 +1021,145 @@ async function dd2BuscarProcessosDJEN(nome,docNum,tipo,socios){
   return {items,rateLimited,algumaFalhou};
 }
 
+// Data a partir da qual a busca "Todos os Processos" procura — o DJEN só
+// existe desde a Resolução CNJ 455/2022 e a adesão dos tribunais foi
+// gradual (muitos só passaram a publicar ali a partir de 2023-2024), então
+// processos mais antigos podem não aparecer mesmo com a janela ampla.
+const DD2_TODOS_PROCESSOS_DESDE='2023-01-01';
+
+// Mesma lógica de dd2BuscarProcessosDJEN, mas sem se limitar à janela
+// padrão de poucos dias do DJEN (que é o que a aba "Comunicações Recentes"
+// usa) — aqui informamos explicitamente dataDisponibilizacaoInicio/Fim pra
+// trazer o histórico completo (usado nas abas "Processos da Empresa" e
+// "Processos dos Sócios", carregadas sob demanda).
+async function dd2BuscarTodosProcessosDJEN(nome,docNum,tipo,socios){
+  const docFmt=dd2FmtDoc(docNum,tipo);
+  const hoje=new Date().toISOString().split('T')[0];
+  const range={dataDisponibilizacaoInicio:DD2_TODOS_PROCESSOS_DESDE,dataDisponibilizacaoFim:hoje};
+  const buscas=docNum?[{origem:'documento',p:dd2FetchDJEN({texto:docFmt,...range})}]:[];
+  if(nome) buscas.push({origem:'nome',p:dd2FetchDJEN({nomeParte:nome,...range})});
+  (socios||[]).filter(s=>s.nome).slice(0,4).forEach(s=>{
+    buscas.push({origem:'sócio "'+s.nome+'"',p:dd2FetchDJEN({nomeParte:s.nome,...range})});
+  });
+  const resultados=await Promise.allSettled(buscas.map(b=>b.p));
+  let rateLimited=false,algumaFalhou=false;
+  const porId=new Map();
+  resultados.forEach((res,i)=>{
+    if(res.status==='fulfilled'){
+      res.value.forEach(item=>{
+        if(!porId.has(item.id)) porId.set(item.id,{...item,_origem:[buscas[i].origem]});
+        else porId.get(item.id)._origem.push(buscas[i].origem);
+      });
+    } else {
+      algumaFalhou=true;
+      if(String(res.reason?.message).includes('RATE_LIMIT')) rateLimited=true;
+    }
+  });
+  const items=[...porId.values()];
+  return {items,rateLimited,algumaFalhou};
+}
+
+// Agrupa comunicações individuais do DJEN por processo (número do
+// processo) — a busca "Todos os Processos" quer mostrar UM processo por
+// linha (com quantas comunicações ele teve), não uma linha por citação/
+// intimação isolada como a aba de Comunicações Recentes.
+function dd2AgruparPorProcesso(items){
+  const porProc=new Map();
+  items.forEach(item=>{
+    const chave=item.numeroprocessocommascara||item.numero_processo||item.id;
+    if(!porProc.has(chave)){
+      porProc.set(chave,{numero:chave,tribunal:item.siglaTribunal,classe:item.nomeClasse,comunicacoes:[],origens:new Set()});
+    }
+    const g=porProc.get(chave);
+    g.comunicacoes.push(item);
+    (item._origem||[]).forEach(o=>g.origens.add(o));
+  });
+  const grupos=[...porProc.values()].map(g=>{
+    g.comunicacoes.sort((a,b)=>(b.data_disponibilizacao||'').localeCompare(a.data_disponibilizacao||''));
+    g.ultimaData=g.comunicacoes[0]?.data_disponibilizacao||'';
+    g.qtd=g.comunicacoes.length;
+    // Uma origem "documento" ou "nome" (não-sócio) marca o processo como da
+    // própria empresa/pessoa pesquisada — mesmo que um sócio também apareça
+    // nele (ex: sócio citado como testemunha no processo da empresa).
+    g.daEmpresa=[...g.origens].some(o=>o==='documento'||o==='nome');
+    return g;
+  }).sort((a,b)=>b.ultimaData.localeCompare(a.ultimaData));
+  return grupos;
+}
+
+// Tabela de um grupo de processos (empresa OU sócios) — reaproveitada
+// pelas duas abas novas. Cada linha expande mostrando as comunicações
+// individuais daquele processo (data, tipo, teor).
+function dd2TabelaProcessosAgrupados(grupos,prefixoId){
+  if(!grupos.length) return '<p style="color:#22c55e;font-weight:600">✅ Nenhum processo encontrado nesta busca.</p>';
+  return `<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th></th><th>Tribunal</th><th>Classe</th><th>Processo</th><th>Comunicações</th><th>Última atualização</th><th>Encontrado por</th></tr></thead>
+  <tbody>${grupos.map((g,i)=>{
+    const idRow=prefixoId+'-'+i;
+    const origensTxt=[...g.origens].map(o=>escapeHtml(o)).join(', ');
+    const detalhes=g.comunicacoes.map(p=>{
+      const resumo=(p.texto||'').trim();
+      return `<div style="padding:8px 0;border-bottom:1px solid #e2e8f0">
+        <div style="font-size:.78rem;color:#64748b"><b>${escapeHtml(p.tipoComunicacao)||'Comunicação'}</b> — ${escapeHtml(p.data_disponibilizacao)||'—'}</div>
+        ${resumo?`<div style="font-size:.78rem;margin-top:3px;white-space:pre-wrap">${escapeHtml(resumo.substring(0,500))}${resumo.length>500?'…':''}</div>`:''}
+        ${p.link?`<a href="${escapeHtml(p.link)}" target="_blank" onclick="event.stopPropagation()" class="dd2-link-ext" style="margin-top:4px;padding:3px 8px;font-size:.72rem">🔗 Abrir</a>`:''}
+      </div>`;
+    }).join('');
+    return `<tr style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}')"><td style="width:18px;color:#94a3b8;font-size:.75rem" id="${idRow}-seta">▸</td><td><span class="dd2-badge info">${escapeHtml(g.tribunal)||'—'}</span></td><td>${escapeHtml(g.classe)||'—'}</td><td style="font-size:.75rem">${escapeHtml(g.numero)||'—'}</td><td>${g.qtd}</td><td style="font-size:.75rem">${escapeHtml(g.ultimaData)||'—'}</td><td style="font-size:.75rem">${origensTxt}</td></tr>
+    <tr id="${idRow}" style="display:none;background:#f8fafc"><td></td><td colspan="6" style="padding:10px 12px">${detalhes}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+
+// Troca de aba dentro do card "Processos Judiciais". A aba "Comunicações
+// Recentes" já vem carregada (é a busca padrão que roda em toda
+// investigação); as abas "Processos da Empresa"/"dos Sócios" fazem uma
+// busca própria (janela de datas ampla) só na primeira vez que o usuário
+// clica nelas — evita gastar o rate limit do DJEN à toa quando ninguém
+// olha essas abas.
+function dd2AbaJudicial(aba){
+  ['recentes','empresa','socios'].forEach(a=>{
+    document.getElementById('dd2-jud-tab-'+a)?.classList.toggle('active',a===aba);
+  });
+  document.getElementById('dd2-judicial-content').style.display=aba==='recentes'?'':'none';
+  document.getElementById('dd2-judicial-empresa-content').style.display=aba==='empresa'?'':'none';
+  document.getElementById('dd2-judicial-socios-content').style.display=aba==='socios'?'':'none';
+  if((aba==='empresa'||aba==='socios')&&!dd2TodosProcessosData&&!dd2TodosProcessosCarregando){
+    dd2CarregarTodosProcessos();
+  }
+}
+
+async function dd2CarregarTodosProcessos(){
+  if(!dd2JudicialCtx) return;
+  dd2TodosProcessosCarregando=true;
+  const loading='<div class="dd2-loading">⏳ Buscando histórico completo de processos (pode levar alguns segundos)...</div>';
+  document.getElementById('dd2-judicial-empresa-content').innerHTML=loading;
+  document.getElementById('dd2-judicial-socios-content').innerHTML=loading;
+  try{
+    const {nome,docNum,tipo,socios}=dd2JudicialCtx;
+    dd2TodosProcessosData=await dd2BuscarTodosProcessosDJEN(nome,docNum,tipo,socios);
+  }catch(e){
+    dd2TodosProcessosData={items:[],rateLimited:false,algumaFalhou:true};
+  }
+  dd2TodosProcessosCarregando=false;
+  dd2RenderTodosProcessos();
+}
+
+function dd2RenderTodosProcessos(){
+  const {items,rateLimited,algumaFalhou}=dd2TodosProcessosData||{items:[],rateLimited:false,algumaFalhou:false};
+  const grupos=dd2AgruparPorProcesso(items);
+  const gruposEmpresa=grupos.filter(g=>g.daEmpresa);
+  const gruposSocios=grupos.filter(g=>!g.daEmpresa);
+  let avisos='';
+  if(rateLimited) avisos='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Limite de requisições do DJEN atingido — resultado pode estar incompleto. Tente novamente em cerca de 1 minuto.</p>';
+  else if(algumaFalhou) avisos='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais buscas no DJEN falharam — resultado pode estar incompleto.</p>';
+  const nota=`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca no DJEN desde ${DD2_TODOS_PROCESSOS_DESDE.split('-').reverse().join('/')} (o DJEN é recente — tribunais aderiram gradualmente, processos mais antigos podem não aparecer). Agrupado por processo: cada linha pode ter várias comunicações (citação, intimação, edital...), clique pra ver o histórico.</p>`;
+
+  document.getElementById('dd2-judicial-empresa-content').innerHTML=
+    avisos+nota+dd2TabelaProcessosAgrupados(gruposEmpresa,'dd2-proc-emp');
+
+  document.getElementById('dd2-judicial-socios-content').innerHTML=
+    avisos+nota+dd2TabelaProcessosAgrupados(gruposSocios,'dd2-proc-soc');
+}
+
 // Links de verificação manual, como reforço à busca automática do DJEN
 // (que não garante cobertura de 100% dos tribunais/processos). Quando é
 // uma consulta de CNPJ, inclui também um link por sócio listado no QSA.
@@ -1378,6 +1542,8 @@ function dd2RenderJudicial(res,nome,docNum,tipo,socios){
   const el=document.getElementById('dd2-judicial-content');
   const {items,rateLimited,algumaFalhou}=res;
   dd2JudicialNomesAlvo=[nome,...(socios||[]).map(s=>s.nome)].filter(Boolean);
+  dd2JudicialCtx={nome,docNum,tipo,socios};
+  dd2TodosProcessosData=null; // nova busca: invalida cache das abas de processos
   let avisos='';
   if(rateLimited) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Limite de requisições do DJEN atingido — resultado pode estar incompleto. Tente novamente em cerca de 1 minuto.</p>';
   else if(algumaFalhou) avisos+='<p style="color:#b45309;font-size:.82rem;margin-bottom:6px">⚠️ Uma ou mais buscas no DJEN falharam — resultado pode estar incompleto.</p>';
