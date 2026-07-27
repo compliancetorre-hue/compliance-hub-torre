@@ -780,7 +780,7 @@
     ══════════════════════════════════════════ -->
     <div class="page" id="page-canal-denuncia-als">
 
-      <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="stat-grid" style="grid-template-columns:repeat(5,1fr)">
         <div class="stat-card highlight">
           <div class="stat-icon" style="background:rgba(0,196,154,.2)">📣</div>
           <div>
@@ -800,6 +800,13 @@
           <div>
             <div class="stat-num" id="dnals-analise" style="color:var(--warn)">0</div>
             <div class="stat-label">Em Análise</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#ede9fe">⏱️</div>
+          <div>
+            <div class="stat-num" id="dnals-sla-venc" style="color:var(--purple)">0</div>
+            <div class="stat-label">SLA Vencido (90d)</div>
           </div>
         </div>
         <div class="stat-card">
@@ -848,6 +855,7 @@
                 <th>Recebida em</th>
                 <th>Identificação</th>
                 <th>Status</th>
+                <th>SLA (90d)</th>
                 <th>Responsável</th>
                 <th>Ações</th>
               </tr></thead>
@@ -1463,7 +1471,10 @@
       <span id="dnals-detail-status" style="margin-left:4px"></span>
     </div>
     <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:10px" id="dnals-detail-meta"></div>
-    <div id="dnals-detail-prazo" style="font-size:.8rem;margin-bottom:18px;padding:8px 12px;border-radius:8px;display:inline-block"></div>
+    <div style="max-width:260px;margin-bottom:18px">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:4px">SLA (90 dias)</div>
+      <div id="dnals-detail-sla"></div>
+    </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
       <div>
