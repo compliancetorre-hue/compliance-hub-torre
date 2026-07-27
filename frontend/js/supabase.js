@@ -305,13 +305,6 @@ async function sbSaveDenunciaAls(d) {
     auditLog('update','denuncias_als', `Denúncia ALS ${d.proto||d.id} — status: ${d.status||''}`, {proto:d.proto, status:d.status});
   } catch(e) { console.warn('sbSaveDenunciaAls:', e.message); }
 }
-async function sbDeleteDenunciaAls(id) {
-  if(!USE_SUPABASE) return;
-  try {
-    await sbDelete('denuncias_als', id);
-    auditLog('delete','denuncias_als', `Denúncia ALS ID ${id} excluída`, {id});
-  } catch(e) { console.warn('sbDeleteDenunciaAls:', e.message); }
-}
 async function sbSaveFilial(f) {
   if(!USE_SUPABASE) return;
   const row = {
