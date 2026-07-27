@@ -33,9 +33,10 @@ function renderDenunciasAls() {
   document.getElementById('dnals-abertas').textContent = all.filter(d => d.status === 'Aberta').length;
   document.getElementById('dnals-analise').textContent = all.filter(d => d.status === 'Em Análise').length;
   document.getElementById('dnals-encerradas').textContent = all.filter(d => d.status === 'Encerrada' || d.status === 'Arquivada').length;
+  document.getElementById('dnals-sla-venc').textContent = all.filter(d => alsDiasDecorridos(d) > 90 && !['Encerrada','Arquivada'].includes(d.status)).length;
 
   if(filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty">Nenhuma denúncia ALS encontrada.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="empty">Nenhuma denúncia ALS encontrada.</td></tr>`;
     return;
   }
 
@@ -51,13 +52,20 @@ function renderDenunciasAls() {
       <td>${d.criadoEm ? formatDate(d.criadoEm.split('T')[0]) : '—'}</td>
       <td>${identificado}</td>
       <td>${statusBadge(d.status)}<div style="font-size:.7rem;color:var(--text-muted);margin-top:2px">${respondida}</div></td>
+      <td style="min-width:120px">${d.criadoEm ? slaBar(d.criadoEm.split('T')[0], d.status) : '—'}</td>
       <td>${d.resp || '—'}</td>
       <td>
         <button class="btn btn-outline btn-sm" onclick="openAlsDetail(${d.id})">👁️ Ver</button>
-        <button class="btn btn-outline btn-sm" onclick="delDenunciaAls(${d.id})" title="Excluir">🗑️</button>
       </td>
     </tr>`;
   }).join('');
+}
+
+// Mesma contagem do Canal de Denúncia original: dias corridos desde o
+// recebimento (criadoEm), sem contar depois que a denúncia é fechada.
+function alsDiasDecorridos(d) {
+  if(!d.criadoEm) return 0;
+  return Math.max(0, Math.floor((new Date() - new Date(d.criadoEm)) / 86400000));
 }
 
 function openAlsDetail(id) {
@@ -70,25 +78,8 @@ function openAlsDetail(id) {
   document.getElementById('dnals-detail-meta').textContent =
     `${d.setor ? d.setor+' · ' : ''}${d.criadoEm ? formatDate(d.criadoEm.split('T')[0]) : ''}`;
 
-  const prazoEl = document.getElementById('dnals-detail-prazo');
-  if(d.criadoEm) {
-    const criado = new Date(d.criadoEm);
-    const prazoLimite = new Date(criado.getTime() + 90*86400000);
-    const diasRestantes = Math.ceil((prazoLimite - new Date()) / 86400000);
-    const prazoStr = prazoLimite.toLocaleDateString('pt-BR');
-    if(diasRestantes < 0) {
-      prazoEl.style.background = '#fef2f2'; prazoEl.style.color = '#b91c1c';
-      prazoEl.textContent = `⚠️ Prazo (90 dias) vencido em ${prazoStr}`;
-    } else if(diasRestantes <= 15) {
-      prazoEl.style.background = '#fffbeb'; prazoEl.style.color = '#92400e';
-      prazoEl.textContent = `⏱️ Prazo até ${prazoStr} — ${diasRestantes} dia(s) restante(s)`;
-    } else {
-      prazoEl.style.background = '#f0fdf9'; prazoEl.style.color = '#065f46';
-      prazoEl.textContent = `⏱️ Prazo até ${prazoStr} — ${diasRestantes} dia(s) restante(s)`;
-    }
-  } else {
-    prazoEl.textContent = '';
-  }
+  document.getElementById('dnals-detail-sla').innerHTML =
+    d.criadoEm ? slaBar(d.criadoEm.split('T')[0], d.status) : '—';
 
   const tipos = (d.tipos||[]).join(', ') + (d.tipoOutro ? ` (Outra: ${d.tipoOutro})` : '');
   document.getElementById('dnals-detail-tipos').textContent = tipos || '—';
@@ -147,13 +138,10 @@ function salvarDenunciaAls() {
   sbSaveDenunciaAls(d).then(() => setSaveIndicator('☁️ Denúncia ALS salva na nuvem','var(--accent)'));
 }
 
-function delDenunciaAls(id) {
-  if(!confirm('Excluir esta denúncia ALS?')) return;
-  DB.denunciasAls = (DB.denunciasAls||[]).filter(d => d.id !== id);
-  renderDenunciasAls();
-  saveLocalCache();
-  sbDeleteDenunciaAls(id).then(() => setSaveIndicator('☁️ Excluída da nuvem','var(--accent)'));
-}
+// Denúncias ALS não podem ser excluídas pelo app — é um canal de
+// denúncia, o histórico precisa ficar preservado. Por isso não existe
+// nenhuma função de exclusão aqui (ao contrário do Canal de Denúncia
+// original, que permite excluir).
 
 // ── QR Code do formulário público ──
 function getAlsFormUrl() {
