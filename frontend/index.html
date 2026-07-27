@@ -162,6 +162,9 @@
     <a onclick="goto('canal-denuncia',this)" data-page="canal-denuncia">
       <span class="icon">📢</span> <span data-editable="menu:canal-denuncia">Canal de Denúncia</span>
     </a>
+    <a onclick="goto('canal-denuncia-als',this)" data-page="canal-denuncia-als">
+      <span class="icon">📣</span> <span data-editable="menu:canal-denuncia-als">Canal de Denúncia ALS</span>
+    </a>
 
     <div class="nav-label" data-editable="secao:analise">Análise</div>
     <a onclick="goto('relatorios',this)" data-page="relatorios">
@@ -770,6 +773,90 @@
       </div>
     </div>
 
+    <!-- ══════════════════════════════════════════
+         CANAL DE DENÚNCIA ALS (segundo canal, formulário
+         público via QR code — tabela e fluxo totalmente
+         separados do Canal de Denúncia acima)
+    ══════════════════════════════════════════ -->
+    <div class="page" id="page-canal-denuncia-als">
+
+      <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat-card highlight">
+          <div class="stat-icon" style="background:rgba(0,196,154,.2)">📣</div>
+          <div>
+            <div class="stat-num" id="dnals-total">0</div>
+            <div class="stat-label">Total ALS</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon amber">📥</div>
+          <div>
+            <div class="stat-num" id="dnals-abertas" style="color:var(--info)">0</div>
+            <div class="stat-label">Abertas</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon amber">🔍</div>
+          <div>
+            <div class="stat-num" id="dnals-analise" style="color:var(--warn)">0</div>
+            <div class="stat-label">Em Análise</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon teal">✅</div>
+          <div>
+            <div class="stat-num" id="dnals-encerradas" style="color:var(--accent)">0</div>
+            <div class="stat-label">Encerradas / Arquivadas</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <h2>📣 Canal de Denúncia ALS</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="openAlsQrModal()">📱 QR Code do Formulário</button>
+          </div>
+        </div>
+        <div class="section-body">
+          <div style="margin-bottom:16px;padding:12px 16px;background:#f0fdf9;border:1px solid #6ee7b7;border-radius:10px;font-size:.83rem;color:#065f46">
+            📢 Este canal recebe denúncias enviadas pelo formulário público (QR code) — <code>frontend/denuncia-als-publica.html</code>.
+            É independente do "Canal de Denúncia" acima: dados, tabela e permissões próprias.
+          </div>
+
+          <div class="filter-bar">
+            <input type="text" id="filtro-dnals-txt" placeholder="🔍 Buscar protocolo, tipo, denunciado..." oninput="renderDenunciasAls()"/>
+            <select id="filtro-dnals-tipo" onchange="renderDenunciasAls()">
+              <option value="">Todos os tipos</option>
+              <option>Assédio moral</option><option>Assédio sexual</option><option>Discriminação</option>
+              <option>Fraude ou desvio de valores</option><option>Roubo/furto</option>
+              <option>Irregularidades trabalhistas</option><option>Conduta antiética</option><option>Outra</option>
+            </select>
+            <select id="filtro-dnals-status" onchange="renderDenunciasAls()">
+              <option value="">Todos os status</option>
+              <option>Aberta</option><option>Em Análise</option><option>Encerrada</option><option>Arquivada</option>
+            </select>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Protocolo</th>
+                <th>Tipo(s)</th>
+                <th>Setor</th>
+                <th>Denunciado</th>
+                <th>Recebida em</th>
+                <th>Identificação</th>
+                <th>Status</th>
+                <th>Responsável</th>
+                <th>Ações</th>
+              </tr></thead>
+              <tbody id="tb-denuncias-als"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- ══════════════════════════════════════════
          RELATÓRIOS — CANAL DE DENÚNCIA
@@ -1321,6 +1408,7 @@
 
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <!-- MODAL: DETALHE DENÚNCIA (relato completo) -->
 <div class="modal-overlay" id="modal-dn-detail">
   <div class="modal" style="width:720px;max-height:85vh">
@@ -1366,6 +1454,96 @@
     </div>
   </div>
 </div>
+
+<!-- MODAL: DETALHE DENÚNCIA ALS -->
+<div class="modal-overlay" id="modal-dnals-detail">
+  <div class="modal" style="width:720px;max-height:85vh">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <h3 id="dnals-detail-proto" style="margin-bottom:0;font-family:'DM Mono',monospace;font-size:1rem"></h3>
+      <span id="dnals-detail-status" style="margin-left:4px"></span>
+    </div>
+    <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:10px" id="dnals-detail-meta"></div>
+    <div id="dnals-detail-prazo" style="font-size:.8rem;margin-bottom:18px;padding:8px 12px;border-radius:8px;display:inline-block"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+      <div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:4px">Tipo(s) de Denúncia</div>
+        <div id="dnals-detail-tipos" style="font-size:.88rem;font-weight:600"></div>
+      </div>
+      <div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:4px">Nome do Denunciado</div>
+        <div id="dnals-detail-denunciado" style="font-size:.88rem;font-weight:600"></div>
+      </div>
+      <div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:4px">Onde</div>
+        <div id="dnals-detail-onde" style="font-size:.88rem"></div>
+      </div>
+      <div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:4px">Quando / Horário</div>
+        <div id="dnals-detail-quando" style="font-size:.88rem"></div>
+      </div>
+    </div>
+
+    <div id="dnals-detail-identificado-wrap" style="display:none;margin-bottom:18px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#1d4ed8;letter-spacing:.5px;margin-bottom:8px">👤 Denunciante Identificado</div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:.84rem">
+        <div id="dnals-detail-id-nome" style="display:none"><span style="color:var(--text-muted);font-size:.72rem;display:block;margin-bottom:1px">Nome</span><strong></strong></div>
+        <div id="dnals-detail-id-tel" style="display:none"><span style="color:var(--text-muted);font-size:.72rem;display:block;margin-bottom:1px">Telefone</span><strong></strong></div>
+        <div id="dnals-detail-id-email" style="display:none"><span style="color:var(--text-muted);font-size:.72rem;display:block;margin-bottom:1px">E-mail</span><strong></strong></div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px">📝 Descrição do Fato</div>
+      <div id="dnals-detail-descricao" style="background:#f8fafc;border-radius:8px;padding:14px;font-size:.86rem;line-height:1.6;white-space:pre-wrap;max-height:200px;overflow-y:auto;border:1px solid var(--border)"></div>
+    </div>
+
+    <div id="dnals-detail-testemunhas-wrap" style="margin-bottom:14px;display:none">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--text-muted);letter-spacing:.5px;margin-bottom:6px">👀 Testemunhas</div>
+      <div id="dnals-detail-testemunhas" style="background:#f8fafc;border-radius:8px;padding:12px;font-size:.85rem;line-height:1.5;white-space:pre-wrap;border:1px solid var(--border)"></div>
+    </div>
+
+    <div class="field" style="margin-bottom:12px">
+      <label>Status</label>
+      <select id="dnals-detail-status-sel">
+        <option>Aberta</option><option>Em Análise</option><option>Encerrada</option><option>Arquivada</option>
+      </select>
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label>Responsável pela Apuração</label>
+      <input type="text" id="dnals-detail-resp" placeholder="Nome do investigador">
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label>Observações Internas / Conclusão <span style="font-size:.7rem;color:var(--text-muted);font-weight:400;text-transform:none">(uso interno — o denunciante nunca vê isto)</span></label>
+      <textarea id="dnals-detail-obs" placeholder="Notas da investigação, ações tomadas, conclusão..."></textarea>
+    </div>
+    <div class="field" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px 14px">
+      <label style="color:#1d4ed8">✉️ Resposta ao Denunciante <span style="font-size:.7rem;color:#1d4ed8;font-weight:400;text-transform:none">(isto é o que aparece para quem consultar o protocolo)</span></label>
+      <textarea id="dnals-detail-resposta" placeholder="Escreva aqui a resposta oficial que o denunciante verá ao consultar o protocolo..."></textarea>
+      <div id="dnals-detail-resposta-em" style="font-size:.72rem;color:var(--text-muted);margin-top:6px"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-dnals-detail')">Fechar</button>
+      <button class="btn btn-accent btn-sm" onclick="salvarDenunciaAls()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: QR CODE DO FORMULÁRIO ALS -->
+<div class="modal-overlay" id="modal-als-qr">
+  <div class="modal" style="width:420px;text-align:center">
+    <h3 style="margin-bottom:6px">📱 QR Code — Canal de Denúncia ALS</h3>
+    <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:18px">Imprima e cole em murais, cartazes ou crachás. Aponta direto para o formulário público.</div>
+    <div id="als-qr-target" style="display:flex;align-items:center;justify-content:center;padding:16px;background:#fff;border:1px solid var(--border);border-radius:12px;margin-bottom:14px"></div>
+    <div style="font-size:.72rem;color:var(--text-muted);word-break:break-all;margin-bottom:16px" id="als-qr-url"></div>
+    <div class="modal-footer" style="justify-content:center">
+      <button class="btn btn-outline" onclick="closeModal('modal-als-qr')">Fechar</button>
+      <button class="btn btn-accent btn-sm" onclick="baixarQrAls()">⬇️ Baixar PNG</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: GERENCIAR DADOS (Admin) -->
 <div class="modal-overlay" id="modal-admin">
   <div class="modal" style="width:560px">
@@ -1904,6 +2082,7 @@
   <script src="js/filiais.js"></script>
   <script src="js/risco.js"></script>
   <script src="js/denuncias.js"></script>
+  <script src="js/denuncias-als.js"></script>
   <script src="js/relatorios.js"></script>
   <script src="js/importar.js"></script>
   <script src="js/flowboard.js"></script>
