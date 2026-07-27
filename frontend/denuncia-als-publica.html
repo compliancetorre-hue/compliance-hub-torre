@@ -225,7 +225,10 @@
         <div class="row"><span class="lbl">Protocolo</span><strong id="res-proto"></strong></div>
         <div class="row"><span class="lbl">Status</span><span id="res-status"></span></div>
         <div class="row"><span class="lbl">Registrada em</span><span id="res-criado"></span></div>
-        <div class="row"><span class="lbl">Prazo de resposta (90 dias)</span><span id="res-prazo"></span></div>
+        <div style="margin-bottom:10px">
+          <div class="lbl" style="margin-bottom:4px">SLA (90 dias)</div>
+          <div id="res-sla"></div>
+        </div>
         <div id="res-resposta-wrap"></div>
       </div>
     </div>
@@ -246,6 +249,19 @@
     document.getElementById('als-success-view').style.display = 'none';
     document.getElementById('tab-btn-registrar').classList.toggle('active', aba === 'registrar');
     document.getElementById('tab-btn-consultar').classList.toggle('active', aba === 'consultar');
+  }
+
+  // Mesma lógica/visual do slaBar() usado no Canal de Denúncia
+  // original (frontend/js/denuncias.js) — % do prazo de 90 dias
+  // consumido, parado quando a denúncia está Encerrada/Arquivada.
+  function renderSlaBar(dias, pct, concluida) {
+    if (concluida) return '<span style="font-size:.85rem;color:var(--accent);font-weight:700">✅ Concluída</span>';
+    const cls = pct >= 100 ? 'over' : pct >= 70 ? 'warn' : 'ok';
+    const color = pct >= 100 ? 'var(--danger)' : pct >= 70 ? 'var(--warn)' : 'var(--accent)';
+    return `<div class="sla-wrap">
+      <div class="sla-label"><span style="color:${color}">${dias}d / 90d</span><span style="color:${color}">${pct}%</span></div>
+      <div class="sla-bar"><div class="sla-fill ${cls}" style="width:${pct}%"></div></div>
+    </div>`;
   }
 
   function formatDataBr(iso) {
@@ -287,8 +303,7 @@
       document.getElementById('res-proto').textContent = data.proto;
       document.getElementById('res-status').textContent = data.status;
       document.getElementById('res-criado').textContent = formatDataBr(data.criadoEm);
-      document.getElementById('res-prazo').textContent =
-        `${formatDataBr(data.prazoLimite)} (${data.diasRestantes} dia(s) restante(s))`;
+      document.getElementById('res-sla').innerHTML = renderSlaBar(data.diasDecorridos, data.pctSla, data.concluida);
 
       const respostaWrap = document.getElementById('res-resposta-wrap');
       if (data.resposta) {
