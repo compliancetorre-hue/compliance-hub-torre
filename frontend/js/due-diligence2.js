@@ -456,7 +456,7 @@ async function dd2Iniciar(){
     dd2SetStep('diarios','active');
     diariosPromise=cadastralPromise.then(cad=>{
         const nome=cad?.razao||nomeManual||'';
-        return dd2BuscarDiarios(nome,doc,tipo).then(res=>({res,nome}));
+        return dd2BuscarDiarios(nome,doc,tipo,cad?.uf).then(res=>({res,nome}));
       }).then(({res,nome})=>{
         dd2DiariosData=res.items;
         dd2RenderDiarios(res,tipo==='cpf'&&!nome);
@@ -499,7 +499,7 @@ async function dd2Iniciar(){
         nomeResolvidoPromise.then(nomeResolvido=>{
           if(!nomeResolvido) return;
           dd2SetStep('diarios','active');
-          return dd2BuscarDiarios(nomeResolvido,doc,tipo).then(res=>{
+          return dd2BuscarDiarios(nomeResolvido,doc,tipo,dd2CadastralData?.uf).then(res=>{
             dd2DiariosData=res.items;
             dd2RenderDiarios(res,false);
             dd2SetStep('diarios','done');
@@ -1299,7 +1299,13 @@ async function dd2FetchDOU(querystring){
 // de limpo, sobrar muito pouca letra de verdade (sinal de que é lixo binário).
 function dd2LimparTrecho(txt){
   if(!txt) return '';
-  const limpo=txt.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F ]/g,"").trim();
+  // Bug corrigido: a versão anterior tinha um espaço literal dentro da
+  // classe de caracteres de controle (`[\x00-\x08...\x1F ]`), removendo
+  // TODOS os espaços do trecho — o texto virava uma palavra só ilegível.
+  // Aqui só some com caracteres de controle de fato, e depois colapsa
+  // quebras de linha/tabs/espaços repetidos (comuns em texto de OCR) num
+  // espaço só, sem grudar as palavras.
+  const limpo=txt.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,"").replace(/\s+/g," ").trim();
   const letras=(limpo.match(/[a-zA-ZÀ-ÿ]/g)||[]).length;
   if(limpo.length>20 && letras/limpo.length<0.4) return '';
   return limpo;
@@ -1318,10 +1324,61 @@ function dd2LinkManualDoerj(alvo){
   return `<a href="${DD2_DOERJ_URL}" target="_blank" class="dd2-link-ext">🔗 Buscar manualmente no DOERJ${alvo?` — "${escapeHtml(alvo)}"`:''}</a>`;
 }
 
+// Diário Oficial do Município do Rio de Janeiro (DOWEB) — diferente do
+// DOERJ (estadual, bloqueado), o portal municipal (doweb.rio.rj.gov.br)
+// tem uma API de busca com CORS liberado por trás do buscador oficial
+// (buscanova). Não é uma API documentada/contratual — é o mesmo backend
+// (ElasticSearch) que o site deles usa, descoberto observando as chamadas
+// de rede do buscador. Cobertura em tempo real (publicação de um dia
+// aparece buscável no dia seguinte), bem mais rápida que o Querido Diário
+// pra essa cidade especificamente. Só roda quando a empresa/pessoa é do
+// Rio de Janeiro (uf==='RJ'), pra não gastar requisição à toa em quem não
+// tem nada a ver com esse diário.
+const DD2_DOWEB_URL='https://doweb.rio.rj.gov.br/busca/busca/buscar/query/0/';
+const DD2_DOWEB_DESDE='2023-01-01';
+
+async function dd2FetchDOWEB(querystring){
+  if(!querystring) return [];
+  const hoje=new Date().toISOString().split('T')[0];
+  const url=`${DD2_DOWEB_URL}di:${DD2_DOWEB_DESDE}/df:${hoje}/?1=1&q=${encodeURIComponent('"'+querystring+'"')}`;
+  const r=await fetch(url,{headers:{'Accept':'application/json'},signal:AbortSignal.timeout(15000)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const d=await r.json();
+  return Array.isArray(d?.hits?.hits)?d.hits.hits:[];
+}
+
+// A API do DOWEB só devolve o texto integral da página (_source.conteudo),
+// sem excerpt destacado nem campos separados de data/edição — recorta na
+// mão um trecho ao redor do termo buscado (mesma ideia do dd2LimparTrecho
+// já usado pro DOU) e tenta achar a data da edição por regex no início do
+// texto (formato "Data: <dia da semana>, <dia> de <mês> de <ano>", que é
+// como o cabeçalho de cada página do D.O. Rio se identifica).
+const DD2_MESES={janeiro:'01',fevereiro:'02',março:'03',abril:'04',maio:'05',junho:'06',julho:'07',agosto:'08',setembro:'09',outubro:'10',novembro:'11',dezembro:'12'};
+// A página costuma ter várias datas soltas no meio do conteúdo (datas de
+// vistoria, de auto de infração etc. de cada item listado) — pegar a
+// primeira ocorrência de "Data:" pegava essas, não a data de publicação da
+// edição. A data confiável é a que vem logo depois de "Assinado
+// Digitalmente" (rodapé de autenticação de cada página, sempre no mesmo
+// formato), então ancora a busca nela em vez de num "Data:" solto.
+function dd2ExtrairDataDOWEB(conteudo){
+  const m=(conteudo||'').match(/Assinado Digitalmente[\s\S]{0,120}?Data:\s*[^,]+,\s*(\d{1,2})\s*de\s*([a-zA-ZçÇ]+)\s*de\s*(\d{4})/i);
+  if(!m) return '';
+  const mes=DD2_MESES[m[2].toLowerCase()];
+  if(!mes) return '';
+  return `${m[1].padStart(2,'0')}/${mes}/${m[3]}`;
+}
+function dd2ExtrairTrechoDOWEB(conteudo,termo){
+  if(!conteudo) return '';
+  const idx=conteudo.toLowerCase().indexOf(termo.toLowerCase());
+  if(idx<0) return dd2LimparTrecho(conteudo.substring(0,400));
+  const inicio=Math.max(0,idx-150);
+  return dd2LimparTrecho(conteudo.substring(inicio,idx+350));
+}
+
 // DOU e Querido Diário devolvem formatos totalmente diferentes (datas em
 // formatos opostos, HTML de destaque embutido no texto etc.) — normaliza
 // os dois pro mesmo formato de exibição.
-function dd2NormalizarDiario(item,fonte){
+function dd2NormalizarDiario(item,fonte,termoBusca){
   if(fonte==='DOU'){
     const trecho=dd2LimparTrecho((item.content||'').replace(/<[^>]+>/g,''));
     return {
@@ -1330,6 +1387,19 @@ function dd2NormalizarDiario(item,fonte){
       data:item.pubDate||'—',
       trechos:[trecho].filter(Boolean),
       url:item.urlTitle?`https://www.in.gov.br/web/dou/-/${item.urlTitle}`:'',
+    };
+  }
+  if(fonte==='DOWEB'){
+    const conteudo=item._source?.conteudo||'';
+    return {
+      titulo:'Rio de Janeiro (Capital) — RJ',
+      local:'Diário Oficial do Município do Rio de Janeiro',
+      data:dd2ExtrairDataDOWEB(conteudo),
+      trechos:[dd2ExtrairTrechoDOWEB(conteudo,termoBusca)].filter(Boolean),
+      // Não temos um link direto pra página exata (a API não devolve isso) —
+      // linka pra busca já pronta no site oficial, com o mesmo termo e
+      // período, pra conferência manual do resultado certo.
+      url:`https://doweb.rio.rj.gov.br/buscanova/#/p=1&q=${encodeURIComponent(termoBusca)}&di=${DD2_DOWEB_DESDE.replace(/-/g,'')}&df=${new Date().toISOString().split('T')[0].replace(/-/g,'')}`,
     };
   }
   return {
@@ -1350,7 +1420,7 @@ function dd2DataDiarioOrdenavel(data){
   return m?`${m[3]}-${m[2]}-${m[1]}`:data;
 }
 
-async function dd2BuscarDiarios(nome,docNum,tipo){
+async function dd2BuscarDiarios(nome,docNum,tipo,uf){
   const docFmt=dd2FmtDoc(docNum,tipo);
   // CPF completo quase nunca é publicado por extenso em diário oficial (LGPD
   // costuma mascarar: "***.456.789-**") — buscar por ele pra pessoa física
@@ -1362,7 +1432,14 @@ async function dd2BuscarDiarios(nome,docNum,tipo){
   const buscasDOU=tipo==='cnpj'?[dd2FetchDOU(docFmt)]:[];
   if(nome){ buscasQD.push(dd2FetchQueridoDiario(nome)); buscasDOU.push(dd2FetchDOU(nome)); }
 
-  const [resQD,resDOU]=await Promise.all([Promise.allSettled(buscasQD),Promise.allSettled(buscasDOU)]);
+  // DOWEB (Diário Oficial do Município do Rio) só entra quando a empresa/
+  // pessoa é do Rio de Janeiro — buscar por documento não funciona bem
+  // (a razão social por extenso é o que costuma aparecer, não o CNPJ), então
+  // essa fonte busca só pelo nome/razão social.
+  const termoDoweb=nome||'';
+  const buscasDOWEB=(uf==='RJ'&&termoDoweb)?[dd2FetchDOWEB(termoDoweb)]:[];
+
+  const [resQD,resDOU,resDOWEB]=await Promise.all([Promise.allSettled(buscasQD),Promise.allSettled(buscasDOU),Promise.allSettled(buscasDOWEB)]);
   let algumaFalhou=false;
   const porChave=new Map();
   resQD.forEach(res=>{
@@ -1381,8 +1458,16 @@ async function dd2BuscarDiarios(nome,docNum,tipo){
       });
     } else algumaFalhou=true;
   });
+  resDOWEB.forEach(res=>{
+    if(res.status==='fulfilled'){
+      res.value.forEach(g=>{
+        const chave='doweb|'+(g._id||'');
+        if(!porChave.has(chave)) porChave.set(chave,{...dd2NormalizarDiario(g,'DOWEB',termoDoweb),_fonte:'DOWEB'});
+      });
+    } else algumaFalhou=true;
+  });
 
-  const resultadosTodos=[...resQD,...resDOU];
+  const resultadosTodos=[...resQD,...resDOU,...resDOWEB];
   if(algumaFalhou&&resultadosTodos.every(r=>r.status==='rejected')) throw new Error('Todas as buscas em diários oficiais falharam');
   const items=[...porChave.values()].sort((a,b)=>dd2DataDiarioOrdenavel(b.data).localeCompare(dd2DataDiarioOrdenavel(a.data)));
   return {items,algumaFalhou};
@@ -1400,13 +1485,13 @@ function dd2RenderDiarios(res,semNome){
   // verde de "sem menção encontrada".
   if(semNome){el.innerHTML=aviso+'<p style="color:#b45309;font-weight:600">⚠️ Nenhum nome disponível pra buscar — informe o nome completo da pessoa no campo acima pra pesquisar nos diários oficiais.</p>'+dd2LinkManualDoerj();return;}
   if(!items.length){el.innerHTML=aviso+'<p style="color:#22c55e;font-weight:600">✅ Nenhuma menção encontrada em diários oficiais.</p>'+dd2LinkManualDoerj();return;}
-  el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>DOU — Diário Oficial da União</strong> (atos federais) e no <strong>Querido Diário</strong> (Open Knowledge Brasil — mais de 350 municípios). O <strong>DOERJ</strong> (Diário Oficial do RJ) não permite automação — veja o link manual abaixo. Clique num resultado pra ver todos os trechos onde o termo foi encontrado.</p>
+  el.innerHTML=aviso+`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Busca automática no <strong>DOU — Diário Oficial da União</strong> (atos federais), no <strong>Querido Diário</strong> (Open Knowledge Brasil — mais de 350 municípios) e, quando a empresa/pessoa é do Rio de Janeiro, direto no <strong>Diário Oficial do Município do Rio (DOWEB)</strong> — cobertura mais rápida e completa que o Querido Diário pra essa cidade. O <strong>DOERJ</strong> (Diário Oficial do <u>Estado</u> do RJ) não permite automação — veja o link manual abaixo. Clique num resultado pra ver todos os trechos onde o termo foi encontrado.</p>
   ${items.slice(0,30).map((g,i)=>{
     const trechos=(g.trechos||[]).filter(Boolean);
     const trecho=trechos[0]||'';
     const idRow='dd2-diario-det-'+i;
     const resumoCompleto=trechos.length?trechos.map((tx,j)=>`<div style="${j<trechos.length-1?'margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed #e2e8f0':''}">${trechos.length>1?`<b>Trecho ${j+1} de ${trechos.length}:</b><br>`:''}${escapeHtml(tx)}</div>`).join(''):'<span style="color:#94a3b8">Nenhum trecho disponível pra exibição.</span>';
-    const badgeCls=g._fonte==='DOU'?'info':'warn';
+    const badgeCls=g._fonte==='DOU'?'info':g._fonte==='DOWEB'?'ok':'warn';
     return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:8px;background:#fff">
       <div style="cursor:pointer" onclick="dd2ToggleDetalhe('${idRow}','block')">
         <div style="font-weight:600;font-size:.85rem;margin-bottom:2px"><span id="${idRow}-seta" style="color:#94a3b8;font-size:.72rem">▸</span> <span class="dd2-badge ${badgeCls}">${g._fonte}</span> ${escapeHtml(g.titulo)||'—'}</div>
