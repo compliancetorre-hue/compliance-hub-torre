@@ -1257,7 +1257,12 @@ const DD2_QUERIDODIARIO_URL='https://api.queridodiario.ok.org.br/gazettes';
 // faz a mesma diferença de precisão que o DOU (dd2FetchDOU) já usa.
 async function dd2FetchQueridoDiario(querystring){
   if(!querystring) return [];
-  const qs=new URLSearchParams({querystring:'"'+querystring+'"',size:'15'}).toString();
+  // sort_by=descending_date: sem isso, a API ordena por relevância (TF-IDF),
+  // que mistura resultados de anos diferentes fora de ordem — testado na
+  // unha e confirmado que publicações recentes ficavam fora dos top 15,
+  // atrás de resultados antigos "mais relevantes". Com data decrescente,
+  // as publicações mais novas sempre aparecem primeiro.
+  const qs=new URLSearchParams({querystring:'"'+querystring+'"',size:'15',sort_by:'descending_date'}).toString();
   const r=await fetch(`${DD2_QUERIDODIARIO_URL}?${qs}`,{headers:{'Accept':'application/json'},signal:AbortSignal.timeout(15000)});
   if(!r.ok) throw new Error('HTTP '+r.status);
   const d=await r.json();
