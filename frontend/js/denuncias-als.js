@@ -154,7 +154,9 @@ function openAlsQrModal() {
   document.getElementById('als-qr-url').textContent = url;
   const target = document.getElementById('als-qr-target');
   target.innerHTML = '';
-  new QRCode(target, { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  // 640px de resolução real no PNG gerado (bom pra imprimir em cartaz) — a
+  // exibição no modal é só reduzida visualmente por CSS (#als-qr-target canvas).
+  new QRCode(target, { text: url, width: 640, height: 640, correctLevel: QRCode.CorrectLevel.M });
   openModal('modal-als-qr');
 }
 
