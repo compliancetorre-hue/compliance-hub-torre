@@ -2006,19 +2006,25 @@ function dd2RenderSocios(lista){
 // tem QSA/sócios pra investigar, só mostra em quais outras empresas esse
 // nome também aparece como sócio/administrador. PEP, sanções, mídia negativa
 // etc. do próprio indivíduo já aparecem nas outras seções do relatório.
+function dd2LinkManualEmpresasVinculadas(nome){
+  const url='https://cnpjtransparencia.com.br/socio/?nome='+encodeURIComponent(nome||'');
+  return `<div class="dd2-links-ext"><a href="${url}" target="_blank" class="dd2-link-ext">🔗 Consultar manualmente no CNPJ Transparência</a></div>`;
+}
+
 function dd2RenderEmpresasPessoa(nome,empresas){
   const el=document.getElementById('dd2-socios-content');
   if(empresas===null){
-    el.innerHTML='<p style="color:#ef4444;font-size:.85rem">⚠️ Não foi possível consultar empresas vinculadas a este nome no momento.</p>';
+    el.innerHTML=`<p style="color:#ef4444;font-size:.85rem">⚠️ Não foi possível consultar empresas vinculadas a este nome no momento.</p>${dd2LinkManualEmpresasVinculadas(nome)}`;
     return;
   }
   if(!empresas.length){
-    el.innerHTML='<p style="color:#22c55e;font-size:.85rem">✅ Nenhuma outra empresa encontrada vinculada a este nome.</p>';
+    el.innerHTML=`<p style="color:#22c55e;font-size:.85rem">✅ Nenhuma outra empresa encontrada vinculada a este nome.</p>${dd2LinkManualEmpresasVinculadas(nome)}`;
     return;
   }
   const linhas=empresas.map(e=>`<li style="margin-bottom:4px"><a href="https://cnpjtransparencia.com.br/cnpj/${escapeHtml(e.cnpj)}" target="_blank" style="color:#0f2d4a">${escapeHtml(e.nome)||'—'}</a> <span style="color:#94a3b8;font-size:.75rem">(${escapeHtml(e.papel)||'—'}${e.municipioUf?' · '+escapeHtml(e.municipioUf):''}${e.situacao?' · '+escapeHtml(e.situacao):''})</span></li>`).join('');
   el.innerHTML=`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Empresas em que <strong>${escapeHtml(nome)}</strong> também aparece como sócio/administrador no quadro societário (útil pra achar conflito de interesse ou vínculo não declarado). Busca por nome pode trazer homônimos — trate como indício e confirme pelo CPF na fonte antes de decidir.</p>
-  <ul style="margin:0;padding-left:18px">${linhas}</ul>`;
+  <ul style="margin:0;padding-left:18px">${linhas}</ul>
+  ${dd2LinkManualEmpresasVinculadas(nome)}`;
 }
 
 const DD2_BOLSA_MANUAL_URL='https://portaldatransparencia.gov.br/beneficios/novo-bolsa-familia';
