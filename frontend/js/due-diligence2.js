@@ -568,7 +568,7 @@ async function dd2Iniciar(){
           dd2SetStep('socios','done');
           return;
         }
-        return dd2InvestigarSocios(socios,djenItems).then(res=>{
+        return dd2InvestigarSocios(socios,djenItems,doc).then(res=>{
           dd2SociosData=res;dd2SociosFalhou=false;
           dd2RenderSocios(res);
           dd2SetStep('socios','done');dd2SetProgress(72);
@@ -1827,6 +1827,19 @@ function dd2RenderContratosFederais(data,falhou,nome){
 // e o render deixa claro que é indício a confirmar, não condenação.
 const DD2_SOCIOS_MAX=5;
 
+// Empresas vinculadas ao nome do sócio (outras empresas em que ele também
+// é sócio/administrador) — via Edge Function própria "dd2-socio-empresas",
+// que busca no cnpjtransparencia.com.br no servidor (contorna o CORS, que
+// esse site não libera) e devolve JSON limpo. Ver esse arquivo pra
+// detalhes/limitações: supabase/functions/dd2-socio-empresas/index.ts.
+async function dd2FetchEmpresasVinculadas(nome){
+  const url=`${SUPABASE_URL}/functions/v1/dd2-socio-empresas?nome=${encodeURIComponent(nome)}`;
+  const r=await fetch(url,{headers:{'apikey':SUPABASE_ANON,'Authorization':'Bearer '+SUPABASE_ANON},signal:AbortSignal.timeout(15000)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const d=await r.json();
+  return Array.isArray(d?.empresas)?d.empresas:[];
+}
+
 function dd2NomesBatem(nomeAlvo,nomeCandidato){
   const tokensAlvo=dd2TokensRelevantes(nomeAlvo);
   if(tokensAlvo.length<2)return false; // nome de 1 token = homônimo quase certo
@@ -1839,8 +1852,9 @@ function dd2NomesBatem(nomeAlvo,nomeCandidato){
 // nomeParte de cada sócio) — cruzamos aqui por nome em vez de repetir as
 // chamadas, senão estouraria o rate limit do DJEN (20 req/janela). Vem null
 // quando a consulta judicial está desligada/falhou = "não verificado".
-async function dd2InvestigarSocios(socios,djenItems){
+async function dd2InvestigarSocios(socios,djenItems,docAtual){
   const alvo=(socios||[]).filter(s=>s.nome).slice(0,DD2_SOCIOS_MAX);
+  const docAtualLimpo=(docAtual||'').replace(/\D/g,'');
   const chamar=(rota,params)=>fetch(dd2PortalUrl(rota,params+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(12000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(d=>Array.isArray(d)?d:[]);
   const judicialDoSocio=(nome)=>{
     if(!Array.isArray(djenItems))return null; // não verificado
@@ -1852,7 +1866,7 @@ async function dd2InvestigarSocios(socios,djenItems){
   };
   return Promise.all(alvo.map(async s=>{
     const enc=encodeURIComponent(s.nome);
-    const [pepR,ceisR,cnepR,ceafR,intlR,tcuR,midiaR,qdR,douR]=await Promise.allSettled([
+    const [pepR,ceisR,cnepR,ceafR,intlR,tcuR,midiaR,qdR,douR,empresasR]=await Promise.allSettled([
       dd2FetchPep(s.nome,''),
       chamar('ceis','nomeSancionado='+enc),
       chamar('cnep','nomeSancionado='+enc),
@@ -1862,12 +1876,17 @@ async function dd2InvestigarSocios(socios,djenItems){
       dd2FetchGoogleNewsRSS(`"${s.nome}" AND (fraude OR corrupção OR condenado OR investigação OR "lavagem de dinheiro" OR crime OR golpe OR escândalo)`),
       dd2FetchQueridoDiario(s.nome),
       dd2FetchDOU(s.nome),
+      dd2FetchEmpresasVinculadas(s.nome),
     ]);
     const pega=r=>r.status==='fulfilled'&&Array.isArray(r.value)?r.value:[];
     const diarios=[
       ...pega(douR).map(d=>dd2NormalizarDiario(d,'DOU')),
       ...pega(qdR).map(d=>dd2NormalizarDiario(d,'QD')),
     ];
+    // Não faz sentido listar a própria empresa que está sendo investigada
+    // como "outra empresa vinculada" — ela obviamente aparece no resultado,
+    // não é achado novo nenhum.
+    const empresasVinculadas=pega(empresasR).filter(emp=>emp.cnpj!==docAtualLimpo);
     return{
       nome:s.nome,qual:s.qual||'',
       pep:pega(pepR).filter(p=>dd2NomesBatem(s.nome,p.nome||'')),
@@ -1879,10 +1898,12 @@ async function dd2InvestigarSocios(socios,djenItems){
       midia:pega(midiaR).slice(0,5),
       judicial:judicialDoSocio(s.nome),
       diarios:diarios.slice(0,8),
+      empresasVinculadas,
       falhas:{
         pep:pepR.status==='rejected',ceis:ceisR.status==='rejected',cnep:cnepR.status==='rejected',
         ceaf:ceafR.status==='rejected',intl:intlR.status==='rejected',tcu:tcuR.status==='rejected',midia:midiaR.status==='rejected',
         diarios:qdR.status==='rejected'&&douR.status==='rejected',
+        empresas:empresasR.status==='rejected',
       },
     };
   }));
@@ -1906,8 +1927,13 @@ function dd2RenderSocios(lista){
     if(s.judicial?.length)badges.push(`<span class="dd2-badge warn">&#9878; ${s.judicial.length} comunicação(ões) DJEN</span>`);
     if(s.diarios?.length)badges.push(`<span class="dd2-badge warn">&#128220; ${s.diarios.length} diário(s)</span>`);
     if(s.midia.length)badges.push(`<span class="dd2-badge warn">&#128240; ${s.midia.length} notícia(s)</span>`);
+    // Empresa vinculada não é achado negativo por si só (é normal uma pessoa
+    // ter mais de uma empresa) — badge informativo (info), não soma no
+    // "limpo/hit" que pinta o bloco de vermelho.
+    const empresasBadge=s.empresasVinculadas?.length?`<span class="dd2-badge info">&#127970; ${s.empresasVinculadas.length} outra(s) empresa(s)</span>`:'';
     const falhouAlgo=Object.values(s.falhas).some(Boolean);
     const limpo=!badges.length;
+    if(empresasBadge)badges.push(empresasBadge);
     if(limpo)badges.push(falhouAlgo?'<span class="dd2-badge warn">Parcialmente verificado</span>':'<span class="dd2-badge ok">&#9989; Nada encontrado</span>');
     const idDet='dd2-socio-det-'+i;
     const linhaBase=(rotulo,itens,fmt)=>itens.length?`<div style="margin-top:6px"><b>${rotulo}:</b><ul style="margin:4px 0 0 18px;padding:0">${itens.map(fmt).join('')}</ul></div>`:'';
@@ -1920,6 +1946,8 @@ function dd2RenderSocios(lista){
       ${linhaBase('Sanções internacionais (indício — confirmar na fonte)',s.intl,x=>`<li>${escapeHtml((x.names||[]).join(', '))||'—'}${x.source?' — '+escapeHtml(String(x.source).toUpperCase()):''}</li>`)}
       ${linhaBase('Comunicações processuais (DJEN) em que o sócio aparece',s.judicial||[],p=>`<li>${escapeHtml(p.tipoComunicacao)||'Comunicação'} — ${escapeHtml(p.nomeClasse||p.numeroprocessocommascara)||'processo'} <span style="color:#94a3b8;font-size:.75rem">(${escapeHtml(p.siglaTribunal)||'—'}, ${escapeHtml(p.data_disponibilizacao)||'—'})</span></li>`)}
       ${linhaBase('Menções em diários oficiais (DOU + municipais)',s.diarios||[],d=>`<li>${d.url?`<a href="${escapeHtml(d.url)}" target="_blank" style="color:#0f2d4a">${escapeHtml(d.titulo)||'—'}</a>`:escapeHtml(d.titulo)||'—'} <span style="color:#94a3b8;font-size:.75rem">(${escapeHtml(d.local)||''}, ${escapeHtml(d.data)||''})</span>${(d.trechos&&d.trechos[0])?`<div style="color:#64748b;font-size:.76rem;margin-top:2px">"…${escapeHtml(d.trechos[0].slice(0,220))}…"</div>`:''}</li>`)}
+      ${linhaBase('Outras empresas vinculadas a esse nome',s.empresasVinculadas||[],e=>`<li><a href="https://cnpjtransparencia.com.br/cnpj/${escapeHtml(e.cnpj)}" target="_blank" style="color:#0f2d4a">${escapeHtml(e.nome)||'—'}</a> <span style="color:#94a3b8;font-size:.75rem">(${escapeHtml(e.papel)||'—'}${e.municipioUf?' · '+escapeHtml(e.municipioUf):''}${e.situacao?' · '+escapeHtml(e.situacao):''})</span></li>`)}
+      ${s.falhas.empresas?'<div style="color:#94a3b8;margin-top:6px;font-size:.78rem">🏢 Empresas vinculadas: não verificado — a consulta falhou nesta investigação.</div>':''}
       ${s.judicial===null?'<div style="color:#94a3b8;margin-top:6px;font-size:.78rem">⚖ Processos (DJEN): não verificados — a consulta judicial está desligada ou falhou nesta investigação.</div>':''}
       ${linhaBase('Mídia negativa',s.midia,n=>`<li><a href="${escapeHtml(n.link)||'#'}" target="_blank" style="color:#0f2d4a">${escapeHtml(n.title)||'—'}</a> <span style="color:#94a3b8;font-size:.75rem">(${n.pubDate?new Date(n.pubDate).toLocaleDateString('pt-BR'):''} — ${escapeHtml(n.source?.name)||''})</span></li>`)}
       ${limpo&&!falhouAlgo?'<div style="color:#22c55e;margin-top:6px">✅ Nenhum apontamento nas bases consultadas (PEP, CEIS, CNEP, CEAF, TCU, sanções internacionais, DJEN, diários oficiais e mídia negativa).</div>':''}
@@ -1942,7 +1970,7 @@ function dd2RenderSocios(lista){
   }).join('');
   const extras=(lista.length<(dd2CadastralData?.socios||[]).length)?`<p style="font-size:.75rem;color:#94a3b8;margin-top:8px">Investigação automática limitada aos ${DD2_SOCIOS_MAX} primeiros sócios do QSA — os demais aparecem nos links manuais da seção Judicial.</p>`:'';
   el.innerHTML=`
-    <p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Cada sócio do QSA é verificado individualmente em: <strong>PEP</strong>, <strong>CEIS</strong>, <strong>CNEP</strong>, <strong>CEAF</strong>, <strong>inidôneos do TCU</strong>, <strong>sanções internacionais</strong>, <strong>processos (DJEN)</strong>, <strong>diários oficiais (DOU + municipais)</strong> e <strong>mídia negativa</strong>. Clique num sócio pra ver o detalhe. Buscas por nome podem trazer homônimos — trate como indício e confirme pelo CPF na fonte antes de decidir.</p>
+    <p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Cada sócio do QSA é verificado individualmente em: <strong>PEP</strong>, <strong>CEIS</strong>, <strong>CNEP</strong>, <strong>CEAF</strong>, <strong>inidôneos do TCU</strong>, <strong>sanções internacionais</strong>, <strong>processos (DJEN)</strong>, <strong>diários oficiais (DOU + municipais)</strong>, <strong>mídia negativa</strong> e <strong>outras empresas em que também é sócio/administrador</strong> (útil pra achar conflito de interesse ou empresa relacionada não declarada). Clique num sócio pra ver o detalhe. Buscas por nome podem trazer homônimos — trate como indício e confirme pelo CPF na fonte antes de decidir.</p>
     ${blocos}${extras}`;
 }
 
