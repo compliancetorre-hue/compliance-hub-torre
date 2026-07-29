@@ -134,7 +134,7 @@ function dd2HTML(){return `
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-fiscal" checked> &#128188; Situação Fiscal</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-judicial" checked> &#9878; Processos Judiciais</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-sancoes" checked> &#128171; Sanções e Restrições</label>
-      <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-socios" checked> &#128101; Investigação dos Sócios (CNPJ)</label>
+      <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-socios" checked> &#128101; Investigação dos Sócios / Empresas Vinculadas</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-pep" checked> &#127963; PEP</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-contratos" checked> &#128196; Contratos c/ Governo Federal</label>
       <label class="dd2-scope-item"><input type="checkbox" id="dd2-sc-midia"> &#128240; Mídia Negativa</label>
@@ -197,7 +197,7 @@ function dd2HTML(){return `
       <div id="dd2-qsa-content"></div>
     </div>
     <div class="dd2-card" id="dd2-sec-socios" style="display:none">
-      <div class="dd2-card-title">&#128373; Investigação dos Sócios</div>
+      <div class="dd2-card-title"><span id="dd2-socios-titulo">&#128373; Investigação dos Sócios</span></div>
       <div id="dd2-socios-content"><div class="dd2-loading">&#9203; Investigando cada sócio (PEP, sanções, mídia negativa)...</div></div>
     </div>
     <div class="dd2-card" id="dd2-sec-fiscal">
@@ -551,10 +551,12 @@ async function dd2Iniciar(){
     dd2SetStep('sancoes','done');
     document.getElementById('dd2-sancoes-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Consulta de sanções não selecionada.</p>';
   }
-  // ── Investigação individual dos sócios (só CNPJ — CPF não tem QSA) ──
+  // ── Investigação individual dos sócios (CNPJ, via QSA) ou empresas
+  // vinculadas ao nome pesquisado (CPF, sem QSA) ──
   if(scSocios&&tipo==='cnpj'){
     dd2SetStep('socios','active');
     document.getElementById('dd2-sec-socios').style.display='block';
+    document.getElementById('dd2-socios-titulo').innerHTML='&#128373; Investigação dos Sócios';
     document.getElementById('dd2-socios-content').innerHTML='<div class="dd2-loading">&#9203; Investigando cada sócio (PEP, sanções, TCU, mídia negativa)...</div>';
     tasks.push(
       // Espera também o DJEN (quando a consulta judicial está ligada) pra
@@ -578,9 +580,35 @@ async function dd2Iniciar(){
         document.getElementById('dd2-socios-content').innerHTML='<p style="color:#ef4444">⚠️ Não foi possível concluir a investigação automática dos sócios — use os links manuais da seção Judicial.</p>';
       })
     );
+  } else if(scSocios&&tipo==='cpf'){
+    // Busca por CPF/nome direto (não via QSA de um CNPJ) — não tem sócios
+    // pra investigar, mas ainda dá pra checar se esse nome aparece como
+    // sócio/administrador em OUTRAS empresas (reaproveita o mesmo card).
+    dd2SetStep('socios','active');
+    document.getElementById('dd2-sec-socios').style.display='block';
+    document.getElementById('dd2-socios-titulo').innerHTML='&#127970; Empresas Vinculadas';
+    document.getElementById('dd2-socios-content').innerHTML='<div class="dd2-loading">&#9203; Buscando empresas vinculadas a este nome...</div>';
+    tasks.push(
+      Promise.all([cadastralPromise,nomeResolvidoPromise]).then(([cad,nomeResolvido])=>{
+        const nomePessoa=nomeManual||nomeResolvido||cad?.razao||'';
+        if(!nomePessoa||nomePessoa.trim().length<3){
+          document.getElementById('dd2-socios-content').innerHTML='<p style="color:#64748b;font-size:.85rem">Nome não identificado — não é possível buscar empresas vinculadas.</p>';
+          dd2SetStep('socios','done');
+          return;
+        }
+        return dd2FetchEmpresasVinculadas(nomePessoa).then(empresas=>{
+          dd2RenderEmpresasPessoa(nomePessoa,empresas);
+          dd2SetStep('socios','done');dd2SetProgress(72);
+        });
+      }).catch(()=>{
+        dd2SetStep('socios','error');
+        dd2RenderEmpresasPessoa(nomeManual||'',null);
+      })
+    );
   } else {
     dd2SetStep('socios','done');
     document.getElementById('dd2-sec-socios').style.display='none';
+    document.getElementById('dd2-socios-titulo').innerHTML='&#128373; Investigação dos Sócios';
   }
   if(scPep){
     dd2SetStep('pep','active');
@@ -1972,6 +2000,25 @@ function dd2RenderSocios(lista){
   el.innerHTML=`
     <p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Cada sócio do QSA é verificado individualmente em: <strong>PEP</strong>, <strong>CEIS</strong>, <strong>CNEP</strong>, <strong>CEAF</strong>, <strong>inidôneos do TCU</strong>, <strong>sanções internacionais</strong>, <strong>processos (DJEN)</strong>, <strong>diários oficiais (DOU + municipais)</strong>, <strong>mídia negativa</strong> e <strong>outras empresas em que também é sócio/administrador</strong> (útil pra achar conflito de interesse ou empresa relacionada não declarada). Clique num sócio pra ver o detalhe. Buscas por nome podem trazer homônimos — trate como indício e confirme pelo CPF na fonte antes de decidir.</p>
     ${blocos}${extras}`;
+}
+
+// Render simples pra quando a busca é por CPF/nome direto (sem CNPJ) — não
+// tem QSA/sócios pra investigar, só mostra em quais outras empresas esse
+// nome também aparece como sócio/administrador. PEP, sanções, mídia negativa
+// etc. do próprio indivíduo já aparecem nas outras seções do relatório.
+function dd2RenderEmpresasPessoa(nome,empresas){
+  const el=document.getElementById('dd2-socios-content');
+  if(empresas===null){
+    el.innerHTML='<p style="color:#ef4444;font-size:.85rem">⚠️ Não foi possível consultar empresas vinculadas a este nome no momento.</p>';
+    return;
+  }
+  if(!empresas.length){
+    el.innerHTML='<p style="color:#22c55e;font-size:.85rem">✅ Nenhuma outra empresa encontrada vinculada a este nome.</p>';
+    return;
+  }
+  const linhas=empresas.map(e=>`<li style="margin-bottom:4px"><a href="https://cnpjtransparencia.com.br/cnpj/${escapeHtml(e.cnpj)}" target="_blank" style="color:#0f2d4a">${escapeHtml(e.nome)||'—'}</a> <span style="color:#94a3b8;font-size:.75rem">(${escapeHtml(e.papel)||'—'}${e.municipioUf?' · '+escapeHtml(e.municipioUf):''}${e.situacao?' · '+escapeHtml(e.situacao):''})</span></li>`).join('');
+  el.innerHTML=`<p style="font-size:.78rem;color:#64748b;margin-bottom:10px">Empresas em que <strong>${escapeHtml(nome)}</strong> também aparece como sócio/administrador no quadro societário (útil pra achar conflito de interesse ou vínculo não declarado). Busca por nome pode trazer homônimos — trate como indício e confirme pelo CPF na fonte antes de decidir.</p>
+  <ul style="margin:0;padding-left:18px">${linhas}</ul>`;
 }
 
 const DD2_BOLSA_MANUAL_URL='https://portaldatransparencia.gov.br/beneficios/novo-bolsa-familia';
