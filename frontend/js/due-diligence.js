@@ -235,7 +235,7 @@ function ddNorm(d,api){
       o.endereco=[d.logradouro,d.numero,d.complemento,d.bairro,d.municipio,d.uf,d.cep].filter(Boolean).join(', ');
       o.cnae_pri={cod:String(d.cnae_fiscal||''),desc:d.cnae_fiscal_descricao||''};
       o.cnaes_sec=(d.cnaes_secundarios||[]).map(c=>({cod:String(c.codigo||''),desc:c.descricao||''}));
-      o.socios=(d.qsa||[]).map(s=>({nome:s.nome_socio||s.nome||'',qual:s.qualificacao_socio||''}));
+      o.socios=(d.qsa||[]).map(s=>({nome:s.nome_socio||s.nome||'',qual:s.qualificacao_socio||'',doc:s.cnpj_cpf_do_socio||'',tipoSocio:s.identificador_de_socio===1?'PJ':s.identificador_de_socio===2?'PF':(s.identificador_de_socio===3?'Estrangeiro':'')}));
     }else if(api==='ReceitaWS'||d.nome){
       o.razao=d.nome||'';o.fantasia=d.fantasia||'';o.situacao=d.situacao||'';o.abertura=d.abertura||'';o.porte=d.porte||'';o.natureza=d.natureza_juridica||'';
       o.capital=d.capital_social||'';o.capitalNum=d.capital_social!=null&&!isNaN(Number(d.capital_social))?Number(d.capital_social):null;o.email=d.email||'';o.telefone=d.telefone||'';
@@ -243,7 +243,8 @@ function ddNorm(d,api){
       o.endereco=[d.logradouro,d.numero,d.complemento,d.bairro,d.municipio,d.uf,d.cep].filter(Boolean).join(', ');
       o.cnae_pri={cod:(d.atividade_principal||[])[0]?.code||'',desc:(d.atividade_principal||[])[0]?.text||''};
       o.cnaes_sec=(d.atividades_secundarias||[]).map(c=>({cod:c.code||'',desc:c.text||''}));
-      o.socios=(d.qsa||[]).map(s=>({nome:s.nome||'',qual:s.qual||''}));
+      // ReceitaWS (free tier) não expõe o CPF/CNPJ do sócio, só nome/qualificação.
+      o.socios=(d.qsa||[]).map(s=>({nome:s.nome||'',qual:s.qual||'',doc:'',tipoSocio:''}));
     }else if(d.estabelecimento){
       const e=d.estabelecimento||{};
       o.razao=d.razao_social||'';o.fantasia=e.nome_fantasia||'';o.situacao=e.situacao_cadastral||'';o.abertura=e.data_inicio_atividade||'';
@@ -255,7 +256,9 @@ function ddNorm(d,api){
       o.endereco=[e.tipo_logradouro,e.logradouro,e.numero,e.complemento,e.bairro,(e.cidade||{}).nome,(e.estado||{}).sigla,e.cep].filter(Boolean).join(', ');
       o.cnae_pri={cod:String((e.cnae_fiscal||{}).id||e.cnae_fiscal||''),desc:(e.cnae_fiscal||{}).descricao||''};
       o.cnaes_sec=(e.cnae_fiscal_secundarios||[]).map(c=>({cod:String((c.cnae||{}).id||c.id||''),desc:(c.cnae||{}).descricao||c.descricao||''}));
-      o.socios=(d.socios||[]).map(s=>({nome:s.nome||'',qual:(s.qualificacao||{}).descricao||''}));
+      // Campo certo é "qualificacao_socio" (objeto {id,descricao}), não
+      // "qualificacao" — antes isso vinha sempre vazio pra essa fonte.
+      o.socios=(d.socios||[]).map(s=>({nome:s.nome||'',qual:(s.qualificacao_socio||{}).descricao?.trim()||'',doc:s.cpf_cnpj_socio||'',tipoSocio:s.tipo==='Pessoa Jurídica'?'PJ':s.tipo==='Pessoa Física'?'PF':(s.tipo||'')}));
     }
     return o;
   }catch(e){return null;}
