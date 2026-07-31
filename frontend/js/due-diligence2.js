@@ -981,7 +981,11 @@ function dd2RenderCadastral(d){
   </div>`;
   if(d.socios?.length){
     document.getElementById('dd2-sec-qsa').style.display='block';
-    document.getElementById('dd2-qsa-content').innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Nome</th><th>Qualificação</th></tr></thead><tbody>${d.socios.map(s=>`<tr><td>${escapeHtml(s.nome)||'—'}</td><td>${escapeHtml(s.qual)||'—'}</td></tr>`).join('')}</tbody></table></div>`;
+    document.getElementById('dd2-qsa-content').innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Nome</th><th>Qualificação</th><th>CNPJ (quando sócio é PJ)</th></tr></thead><tbody>${d.socios.map(s=>{
+      const docLimpo=(s.doc||'').replace(/\D/g,'');
+      const cnpjCel=(s.tipoSocio==='PJ'&&docLimpo.length===14)?`<a href="https://cnpjtransparencia.com.br/cnpj/${docLimpo}" target="_blank" style="color:#0f2d4a;font-family:'DM Mono',monospace">${dd2FmtDoc(docLimpo,'cnpj')}</a>`:'—';
+      return `<tr><td>${escapeHtml(s.nome)||'—'}</td><td>${escapeHtml(s.qual)||'—'}</td><td>${cnpjCel}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
   }
 }
 
@@ -1916,7 +1920,7 @@ async function dd2InvestigarSocios(socios,djenItems,docAtual){
     // não é achado novo nenhum.
     const empresasVinculadas=pega(empresasR).filter(emp=>emp.cnpj!==docAtualLimpo);
     return{
-      nome:s.nome,qual:s.qual||'',
+      nome:s.nome,qual:s.qual||'',doc:s.doc||'',tipoSocio:s.tipoSocio||'',
       pep:pega(pepR).filter(p=>dd2NomesBatem(s.nome,p.nome||'')),
       ceis:pega(ceisR).filter(x=>dd2NomesBatem(s.nome,x.sancionado?.nome||x.pessoa?.nome||'')),
       cnep:pega(cnepR).filter(x=>dd2NomesBatem(s.nome,x.sancionado?.nome||x.pessoa?.nome||'')),
@@ -1986,11 +1990,19 @@ function dd2RenderSocios(lista){
         <a href="https://news.google.com/search?q=${encodeURIComponent('"'+s.nome+'"')}&hl=pt-BR&gl=BR&ceid=BR:pt-419" target="_blank" class="dd2-link-ext">🔗 Google Notícias</a>
         <a href="https://www.google.com/search?q=${encodeURIComponent('"'+s.nome+'" '+(s.qual?'sócio':''))}" target="_blank" class="dd2-link-ext">🔗 Google</a>
       </div>`;
+    // CNPJ do sócio só vem "limpo" (sem máscara) quando ele é pessoa jurídica
+    // — CPF de pessoa física vem sempre mascarado pela Receita (ex.:
+    // "***866757**") e não deve ser exibido/linkado.
+    const docLimpo=(s.doc||'').replace(/\D/g,'');
+    const cnpjSocioHtml=(s.tipoSocio==='PJ'&&docLimpo.length===14)
+      ?`<a href="https://cnpjtransparencia.com.br/cnpj/${docLimpo}" target="_blank" onclick="event.stopPropagation()" style="color:#0f2d4a;font-size:.75rem;font-family:'DM Mono',monospace">${dd2FmtDoc(docLimpo,'cnpj')}</a>`
+      :'';
     return `<div class="dd2-socio-bloco ${limpo?'':'hit'}">
       <div class="dd2-socio-head" style="cursor:pointer" onclick="dd2ToggleDetalhe('${idDet}','block')">
         <span style="color:#94a3b8;font-size:.75rem" id="${idDet}-seta">▸</span>
         <span style="font-weight:700">&#128100; ${escapeHtml(s.nome)}</span>
         <span style="color:#64748b;font-size:.78rem">${escapeHtml(s.qual)||''}</span>
+        ${cnpjSocioHtml}
         <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">${badges.join('')}</span>
       </div>
       <div id="${idDet}" style="display:none;padding:10px 14px;border-top:1px solid #e2e8f0;font-size:.82rem;color:#334155;line-height:1.55">${detalhe}</div>
