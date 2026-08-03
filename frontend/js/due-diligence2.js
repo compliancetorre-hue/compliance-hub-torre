@@ -93,6 +93,10 @@ function dd2HTML(){return `
 .dd2-jud-tab{padding:7px 14px;border-radius:20px;border:1px solid #e2e8f0;background:#f0f4f8;color:#64748b;font-size:.8rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
 .dd2-jud-tab.active{background:#0f2d4a;color:#fff;border-color:#0f2d4a}
 .dd2-jud-subtitle{font-weight:700;color:#0f2d4a;margin:16px 0 8px;font-size:.88rem;display:flex;align-items:center;gap:6px}
+.dd2-view-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.dd2-view-tab{padding:9px 18px;border-radius:20px;border:1px solid #e2e8f0;background:#fff;color:#0f2d4a;font-size:.88rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
+.dd2-view-tab.active{background:#0f2d4a;color:#fff;border-color:#0f2d4a}
+.dd2-btn-radar{background:#7c3aed;color:#fff}
 .dd2-checklist{display:flex;flex-direction:column;gap:8px}
 .dd2-chk-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:#f0f4f8;font-size:.85rem}
 .dd2-chk-item.ok{border-left:4px solid #22c55e}
@@ -102,6 +106,11 @@ function dd2HTML(){return `
 @media print{.dd2-search,.dd2-export-btns{display:none!important}.dd2-card{break-inside:avoid;box-shadow:none}}
 </style>
 <div class="dd2-container">
+  <div class="dd2-view-tabs">
+    <button type="button" class="dd2-view-tab active" id="dd2-view-tab-pesquisa" onclick="dd2TrocarView('pesquisa')">&#128269; Nova Pesquisa</button>
+    <button type="button" class="dd2-view-tab" id="dd2-view-tab-radar" onclick="dd2TrocarView('radar')">&#128225; Radar</button>
+  </div>
+  <div id="dd2-view-pesquisa">
   <div class="dd2-search">
     <h2>&#128269; Investigação Prévia — Due Diligence 2</h2>
     <div class="dd2-form-row">
@@ -176,6 +185,7 @@ function dd2HTML(){return `
     <div class="dd2-export-bar">
       <div class="dd2-export-meta" id="dd2-export-meta"></div>
       <div class="dd2-export-btns">
+        <button class="dd2-btn-radar" onclick="dd2RadarAdicionarDoRelatorio()">&#128225; Adicionar ao Radar</button>
         <button class="dd2-btn-print" onclick="window.print()">&#128438; Imprimir</button>
         <button class="dd2-btn-pdf" onclick="window.print()">&#128229; Exportar PDF</button>
       </div>
@@ -246,6 +256,32 @@ function dd2HTML(){return `
     <div class="dd2-card">
       <div class="dd2-card-title">&#9989; Checklist de Qualidade</div>
       <div class="dd2-checklist" id="dd2-checklist-content"></div>
+    </div>
+  </div>
+  </div>
+  <div id="dd2-view-radar" style="display:none">
+    <div class="dd2-card">
+      <div class="dd2-card-title">&#128225; Radar — Acompanhamento de Mudanças</div>
+      <p style="font-size:.82rem;color:#64748b;margin-bottom:14px">Marque empresas ou pessoas pra acompanhar e clique em "Verificar agora" pra ver se surgiu algo novo desde a última verificação (processos judiciais, diários oficiais, sanções/PEP, mídia negativa e, pra CNPJ, mudança de situação cadastral ou do quadro societário). A verificação é sempre manual, item por item — nunca automática — pra não estourar o limite de consultas do DJEN. A primeira verificação de um item só registra o ponto de partida; a comparação aparece a partir da segunda.</p>
+      <div class="dd2-form-row" style="margin-bottom:16px">
+        <div class="dd2-form-group">
+          <label>Tipo</label>
+          <select id="dd2-radar-tipo">
+            <option value="cnpj">&#127970; CNPJ</option>
+            <option value="cpf">&#128100; CPF</option>
+          </select>
+        </div>
+        <div class="dd2-form-group" style="flex:1;min-width:200px">
+          <label>Documento (opcional pra CPF)</label>
+          <input type="text" id="dd2-radar-doc" placeholder="00.000.000/0001-00"/>
+        </div>
+        <div class="dd2-form-group" style="flex:1;min-width:200px">
+          <label>Nome / Razão Social</label>
+          <input type="text" id="dd2-radar-nome" placeholder="Ex: Empresa XYZ Ltda"/>
+        </div>
+        <button class="dd2-btn-search" style="margin-top:0" onclick="dd2RadarAdicionarManual()">&#10133; Adicionar ao Radar</button>
+      </div>
+      <div id="dd2-radar-lista"><div class="dd2-loading">&#9203; Carregando radar...</div></div>
     </div>
   </div>
 </div>
@@ -689,6 +725,7 @@ async function dd2Iniciar(){
   dd2SetProgress(100);
   const now=new Date();
   document.getElementById('dd2-export-meta').textContent='Relatório gerado em '+now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR')+' — '+doc;
+  dd2UltimaPesquisa={tipo,doc,nome:dd2CadastralData?.razao||nomeManual||(dd2JudicialCtx?.nome)||''};
   } catch(e) {
     console.error('dd2Iniciar erro:', e);
   } finally {
@@ -2384,4 +2421,249 @@ function dd2RenderChecklist(){
     <span>${i.state==='ok'?'&#9989;':i.state==='warn'?'&#9888;&#65039;':'&#10060;'}</span>
     <span>${i.icon} ${i.label}</span>
   </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// RADAR — acompanhamento de mudanças entre pesquisas
+// ═══════════════════════════════════════════════════════
+// Lista de empresas/pessoas marcadas pra acompanhamento (tabela "dd2_radar",
+// acessada como qualquer outra tabela autenticada via Edge Function "api" —
+// mesmo padrão de sbGet/sbInsert/sbDelete usado no resto do app). Cada item
+// guarda um "snapshot" (jsonb) com as chaves das últimas ocorrências vistas
+// em cada fonte — a próxima verificação compara contra esse snapshot pra
+// saber o que é novo, sem precisar guardar o payload inteiro.
+//
+// A verificação é SEMPRE manual, item por item (botão "Verificar agora") —
+// nunca automática/em lote — porque o DJEN só libera ~20 requisições por
+// janela por IP; verificar uma lista inteira de uma vez estouraria esse
+// limite rapidinho e derrubaria a verificação de todo mundo.
+let dd2RadarLista=null;
+// {tipo,doc,nome} da última investigação rodada na aba "Nova Pesquisa" —
+// usado pelo botão "Adicionar ao Radar" no relatório, pra não precisar
+// redigitar os dados de quem acabou de ser pesquisado.
+let dd2UltimaPesquisa=null;
+
+function dd2TrocarView(view){
+  document.getElementById('dd2-view-pesquisa').style.display=view==='pesquisa'?'block':'none';
+  document.getElementById('dd2-view-radar').style.display=view==='radar'?'block':'none';
+  document.getElementById('dd2-view-tab-pesquisa').classList.toggle('active',view==='pesquisa');
+  document.getElementById('dd2-view-tab-radar').classList.toggle('active',view==='radar');
+  if(view==='radar'&&dd2RadarLista===null) dd2RadarCarregar();
+}
+
+async function dd2RadarCarregar(){
+  const el=document.getElementById('dd2-radar-lista');
+  el.innerHTML='<div class="dd2-loading">&#9203; Carregando radar...</div>';
+  try{
+    dd2RadarLista=await sbGet('dd2_radar');
+  }catch(e){
+    dd2RadarLista=null;
+    el.innerHTML=`<p style="color:#ef4444">⚠️ Não foi possível carregar o radar: ${escapeHtml(e.message)}</p>`;
+    return;
+  }
+  dd2RadarRenderLista();
+}
+
+function dd2RadarStatusBadge(item){
+  if(!item.ultima_verificacao) return '<span class="dd2-badge info">&#128312; Nunca verificado</span>';
+  const r=item.ultimo_resultado;
+  if(r&&r.totalNovidades) return `<span class="dd2-badge danger">&#128308; ${r.totalNovidades} novidade(s)</span>`;
+  return '<span class="dd2-badge ok">&#9989; Sem mudanças</span>';
+}
+
+function dd2RadarRenderLista(){
+  const el=document.getElementById('dd2-radar-lista');
+  const lista=(dd2RadarLista||[]).slice().sort((a,b)=>(b.criado_em||'').localeCompare(a.criado_em||''));
+  if(!lista.length){
+    el.innerHTML='<p style="color:#64748b;font-size:.85rem">Nenhum item no radar ainda. Adicione uma empresa ou pessoa acima, ou clique em "&#128225; Adicionar ao Radar" depois de rodar uma pesquisa na aba Nova Pesquisa.</p>';
+    return;
+  }
+  el.innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr>
+    <th>Nome / Razão</th><th>Tipo</th><th>Documento</th><th>Adicionado em</th><th>Última verificação</th><th>Status</th><th>Ações</th>
+  </tr></thead><tbody>${lista.map(item=>{
+    const docFmt=item.doc?dd2FmtDoc(item.doc,item.tipo):'—';
+    const r=item.ultimo_resultado;
+    let detalhes='';
+    if(r&&r.partes&&r.partes.length){
+      detalhes=`<tr><td colspan="7" style="background:#f8fafc;font-size:.8rem;color:#334155;padding:10px 16px"><ul style="margin:0;padding-left:18px">${r.partes.map(p=>`<li>${p}</li>`).join('')}</ul>${r.falhas&&r.falhas.length?`<div style="color:#b45309;margin-top:4px">&#9888;&#65039; Não verificado nesta rodada: ${escapeHtml(r.falhas.join(', '))}</div>`:''}</td></tr>`;
+    } else if(item.ultima_verificacao){
+      const msg=r&&r.primeiraVez?'Primeira verificação — ponto de partida registrado. A comparação de mudanças aparece a partir da próxima verificação.':'Nenhuma novidade encontrada desde a última verificação.';
+      detalhes=`<tr><td colspan="7" style="background:#f8fafc;font-size:.8rem;color:#64748b;padding:8px 16px">${msg}${r&&r.falhas&&r.falhas.length?`<div style="color:#b45309;margin-top:4px">&#9888;&#65039; Não verificado nesta rodada: ${escapeHtml(r.falhas.join(', '))}</div>`:''}</td></tr>`;
+    }
+    return `<tr id="dd2-radar-row-${item.id}">
+      <td>${escapeHtml(item.nome)}</td>
+      <td>${item.tipo==='cnpj'?'&#127970; CNPJ':'&#128100; CPF'}</td>
+      <td style="font-family:'DM Mono',monospace">${docFmt}</td>
+      <td>${item.criado_em?new Date(item.criado_em).toLocaleDateString('pt-BR'):'—'}</td>
+      <td>${item.ultima_verificacao?new Date(item.ultima_verificacao).toLocaleString('pt-BR'):'—'}</td>
+      <td>${dd2RadarStatusBadge(item)}</td>
+      <td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-outline btn-sm" onclick="dd2RadarVerificar(${item.id})">&#128269; Verificar agora</button><button class="btn btn-outline btn-sm" onclick="dd2RadarRemover(${item.id})">&#128465;&#65039;</button></div></td>
+    </tr>${detalhes}`;
+  }).join('')}</tbody></table></div>`;
+}
+
+async function dd2RadarAdicionarManual(){
+  const tipo=document.getElementById('dd2-radar-tipo').value;
+  const doc=document.getElementById('dd2-radar-doc').value;
+  const nome=document.getElementById('dd2-radar-nome').value;
+  const ok=await dd2RadarAdicionar(tipo,doc,nome);
+  if(ok){
+    document.getElementById('dd2-radar-doc').value='';
+    document.getElementById('dd2-radar-nome').value='';
+  }
+}
+
+async function dd2RadarAdicionar(tipo,doc,nome){
+  nome=(nome||'').trim();
+  if(!nome){alert('Informe o nome ou razão social pra adicionar ao Radar.');return false;}
+  const docLimpo=(doc||'').replace(/\D/g,'');
+  const row={id:Date.now(),tipo,doc:docLimpo||null,nome,criado_em:new Date().toISOString(),ultima_verificacao:null,snapshot:null,ultimo_resultado:null};
+  try{
+    await sbInsert('dd2_radar',row);
+  }catch(e){
+    alert('Erro ao adicionar ao Radar: '+e.message);
+    return false;
+  }
+  dd2RadarLista=null;
+  if(document.getElementById('dd2-view-radar').style.display!=='none') await dd2RadarCarregar();
+  return true;
+}
+
+async function dd2RadarAdicionarDoRelatorio(){
+  if(!dd2UltimaPesquisa||!dd2UltimaPesquisa.nome){
+    alert('Não foi possível identificar o nome/razão social desta pesquisa pra adicionar ao Radar.');
+    return;
+  }
+  const ok=await dd2RadarAdicionar(dd2UltimaPesquisa.tipo,dd2UltimaPesquisa.doc,dd2UltimaPesquisa.nome);
+  if(ok) alert('Adicionado ao Radar! Veja a aba "📡 Radar" pra acompanhar.');
+}
+
+async function dd2RadarRemover(id){
+  if(!confirm('Remover este item do Radar? O histórico de verificação dele será perdido.'))return;
+  try{
+    await sbDelete('dd2_radar',id);
+  }catch(e){
+    alert('Erro ao remover do Radar: '+e.message);
+    return;
+  }
+  dd2RadarLista=(dd2RadarLista||[]).filter(x=>x.id!==id);
+  dd2RadarRenderLista();
+}
+
+// Verificação manual de UM item do radar — busca as mesmas fontes usadas na
+// investigação principal (DJEN, diários oficiais, PEP/CEIS/CNEP/TCU/sanções
+// internacionais, mídia negativa e, pra CNPJ, situação cadastral + QSA) e
+// compara contra o snapshot da verificação anterior. Fonte que falhar nesta
+// rodada NÃO conta como "sem novidade" — mantém o snapshot anterior daquela
+// fonte intacto (fica "não verificado", não "limpo") e aparece na lista de
+// falhas, pro usuário saber que aquele pedaço não foi realmente conferido.
+async function dd2RadarVerificar(id){
+  const item=(dd2RadarLista||[]).find(x=>x.id===id);
+  if(!item)return;
+  const row=document.getElementById('dd2-radar-row-'+id);
+  const btn=row?.querySelector('button');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Verificando...';}
+  try{
+    const nome=item.nome, doc=item.doc||'', tipo=item.tipo;
+    const docFmt=doc?dd2FmtDoc(doc,tipo):'';
+    const chamar=(rota,params)=>fetch(dd2PortalUrl(rota,params+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(12000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(d=>Array.isArray(d)?d:[]);
+    const enc=encodeURIComponent(nome);
+
+    const [djenR,diariosR,pepR,ceisR,cnepR,tcuR,intlR,midiaR,cadR]=await Promise.allSettled([
+      dd2BuscarTodosProcessosDJEN(nome,doc,tipo,[]),
+      dd2BuscarDiarios(nome,doc,tipo,''),
+      dd2FetchPep(nome,tipo==='cpf'?doc:''),
+      chamar('ceis','nomeSancionado='+enc),
+      chamar('cnep','nomeSancionado='+enc),
+      dd2FetchTCUInidoneos().then(items=>dd2TcuPorNome(items,nome)),
+      dd2FetchSanctionsNetwork(nome).then(h=>dd2FiltrarRuidoSancoesIntl(h,nome)),
+      dd2BuscarMidiaNegativa(nome,docFmt,''),
+      (tipo==='cnpj'&&doc)?dd2BuscarCNPJ(doc):Promise.resolve(null),
+    ]);
+
+    const anterior=item.snapshot||{};
+    const falhas=[];
+    // extrator(valor) roda só se a fonte respondeu OK nesta rodada; se
+    // falhou, devolve undefined (sinal pra "manter snapshot anterior" mais
+    // abaixo) e registra o nome da fonte em `falhas`.
+    const fonte=(nomeFonte,res,extrator)=>{
+      if(res.status==='fulfilled') return extrator(res.value);
+      falhas.push(nomeFonte);
+      return undefined;
+    };
+
+    const djenIds=fonte('Processos (DJEN)',djenR,v=>v.items.map(x=>String(x.id)));
+    const diariosKeys=fonte('Diários oficiais',diariosR,v=>v.items.map(x=>x.url||(x.titulo+'|'+x.data)));
+    const pepKeys=fonte('PEP',pepR,v=>v.map(p=>p.nome+'|'+p.dt_inicio_exercicio));
+    const ceisKeys=fonte('CEIS',ceisR,v=>v.map(x=>(x.sancionado?.nome||x.pessoa?.nome||'')+'|'+(x.tipoSancao?.descricaoResumida||'')));
+    const cnepKeys=fonte('CNEP',cnepR,v=>v.map(x=>(x.sancionado?.nome||x.pessoa?.nome||'')+'|'+(x.tipoSancao?.descricaoResumida||'')));
+    const tcuKeys=fonte('TCU',tcuR,v=>v.map(x=>x.processo||x.nome));
+    const intlKeys=fonte('Sanções internacionais',intlR,v=>v.map(x=>(x.names||[]).join(',')+'|'+(x.source||'')));
+    const midiaKeys=fonte('Mídia negativa',midiaR,v=>v.map(x=>x.link));
+    let situacao,sociosNomes;
+    if(tipo==='cnpj'&&doc){
+      situacao=fonte('Situação cadastral',cadR,v=>v?.situacao||'');
+      sociosNomes=fonte('Quadro societário (QSA)',cadR,v=>(v?.socios||[]).map(s=>s.nome).sort());
+    }
+
+    const diffCount=(atualArr,antArr)=>{
+      if(atualArr===undefined)return 0; // fonte falhou nesta rodada — não conta como novidade
+      if(!antArr)return 0; // primeira vez, sem base de comparação
+      const antSet=new Set(antArr);
+      return atualArr.filter(k=>!antSet.has(k)).length;
+    };
+    const dJudicial=diffCount(djenIds,anterior.djenIds);
+    const dDiarios=diffCount(diariosKeys,anterior.diariosKeys);
+    const dPep=diffCount(pepKeys,anterior.pepKeys);
+    const dCeis=diffCount(ceisKeys,anterior.ceisKeys);
+    const dCnep=diffCount(cnepKeys,anterior.cnepKeys);
+    const dTcu=diffCount(tcuKeys,anterior.tcuKeys);
+    const dIntl=diffCount(intlKeys,anterior.intlKeys);
+    const dMidia=diffCount(midiaKeys,anterior.midiaKeys);
+    // Comparação normalizada (maiúsculas/minúsculas) — BrasilAPI, ReceitaWS e
+    // CNPJ.ws escrevem a mesma situação com capitalização diferente ("ATIVA"
+    // vs "Ativa"), o que gerava falso positivo de "mudança" mesmo sem
+    // nenhuma alteração real, só por ter caído numa fonte diferente na API
+    // de fallback entre uma verificação e outra.
+    const situacaoMudou=!!(anterior.situacao&&situacao&&anterior.situacao.trim().toUpperCase()!==situacao.trim().toUpperCase());
+    const socioMudou=!!(anterior.sociosNomes&&sociosNomes&&JSON.stringify(anterior.sociosNomes)!==JSON.stringify(sociosNomes));
+
+    const primeiraVez=!item.snapshot;
+    const totalNovidades=dJudicial+dDiarios+dPep+dCeis+dCnep+dTcu+dIntl+dMidia+(situacaoMudou?1:0)+(socioMudou?1:0);
+
+    const partes=[];
+    if(dJudicial)partes.push(`&#9878; ${dJudicial} novo(s) processo(s)/comunicação(ões) no DJEN`);
+    if(dDiarios)partes.push(`&#128240; ${dDiarios} nova(s) menção(ões) em diário oficial`);
+    if(dPep)partes.push(`&#127963; ${dPep} novo(s) registro(s) PEP`);
+    if(dCeis)partes.push(`&#128171; ${dCeis} nova(s) sanção(ões) CEIS`);
+    if(dCnep)partes.push(`&#128171; ${dCnep} nova(s) sanção(ões) CNEP`);
+    if(dTcu)partes.push(`&#9888;&#65039; ${dTcu} novo(s) registro(s) TCU inidôneos`);
+    if(dIntl)partes.push(`&#127760; ${dIntl} nova(s) sanção(ões) internacional(is)`);
+    if(dMidia)partes.push(`&#128240; ${dMidia} nova(s) notícia(s) negativa(s)`);
+    if(situacaoMudou)partes.push(`&#127970; Situação cadastral mudou: "${escapeHtml(anterior.situacao)}" &#8594; "${escapeHtml(situacao)}"`);
+    if(socioMudou)partes.push('&#128101; Quadro societário (QSA) mudou');
+
+    item.snapshot={
+      djenIds: djenIds!==undefined?djenIds:anterior.djenIds,
+      diariosKeys: diariosKeys!==undefined?diariosKeys:anterior.diariosKeys,
+      pepKeys: pepKeys!==undefined?pepKeys:anterior.pepKeys,
+      ceisKeys: ceisKeys!==undefined?ceisKeys:anterior.ceisKeys,
+      cnepKeys: cnepKeys!==undefined?cnepKeys:anterior.cnepKeys,
+      tcuKeys: tcuKeys!==undefined?tcuKeys:anterior.tcuKeys,
+      intlKeys: intlKeys!==undefined?intlKeys:anterior.intlKeys,
+      midiaKeys: midiaKeys!==undefined?midiaKeys:anterior.midiaKeys,
+      situacao: situacao!==undefined?situacao:anterior.situacao,
+      sociosNomes: sociosNomes!==undefined?sociosNomes:anterior.sociosNomes,
+    };
+    item.ultimo_resultado={totalNovidades,partes,falhas,primeiraVez};
+    item.ultima_verificacao=new Date().toISOString();
+    await sbUpsert('dd2_radar',{
+      id:item.id,tipo:item.tipo,doc:item.doc,nome:item.nome,criado_em:item.criado_em,
+      ultima_verificacao:item.ultima_verificacao,snapshot:item.snapshot,ultimo_resultado:item.ultimo_resultado
+    });
+  }catch(e){
+    alert('Erro ao verificar: '+e.message);
+  }finally{
+    dd2RadarRenderLista();
+  }
 }
