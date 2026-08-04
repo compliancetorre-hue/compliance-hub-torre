@@ -15,9 +15,14 @@ const JUNTAS={};
 Object.keys(JUNTAS_SLUG).forEach(uf=>{JUNTAS[uf]={n:JUNTAS_NOME[uf],u:`https://www.gov.br/empresas-e-negocios/pt-br/drei/juntas-comerciais/${JUNTAS_SLUG[uf]}`};});
 
 // ── MASKS ─────────────────────────────────
-function ddMC(v){v=v.replace(/\D/g,'');v=v.replace(/^(\d{2})(\d)/,'$1.$2');v=v.replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3');v=v.replace(/\.(\d{3})(\d)/,'.$1/$2');v=v.replace(/(\d{4})(\d)/,'$1-$2');return v.substr(0,18);}
+// CNPJ alfanumérico (Receita Federal, regra nova de 2026): as 12 primeiras
+// posições (raiz + ordem) aceitam letras A-Z além de números — só os 2
+// dígitos verificadores finais continuam sempre numéricos. \D removeria as
+// letras e corromperia o documento; esta função remove só pontuação/espaço.
+function ddSoAlfanum(v){return (v||'').toUpperCase().replace(/[^0-9A-Z]/g,'');}
+function ddMC(v){v=ddSoAlfanum(v);v=v.replace(/^([0-9A-Z]{2})([0-9A-Z])/,'$1.$2');v=v.replace(/^([0-9A-Z]{2})\.([0-9A-Z]{3})([0-9A-Z])/,'$1.$2.$3');v=v.replace(/\.([0-9A-Z]{3})([0-9A-Z])/,'.$1/$2');v=v.replace(/([0-9A-Z]{4})([0-9A-Z])/,'$1-$2');return v.substr(0,18);}
 function ddMCpf(v){v=v.replace(/\D/g,'');v=v.replace(/(\d{3})(\d)/,'$1.$2');v=v.replace(/(\d{3})(\d)/,'$1.$2');v=v.replace(/(\d{3})(\d{1,2})$/,'$1-$2');return v.substr(0,14);}
-function ddFmt(n){return n.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');}
+function ddFmt(n){return ddSoAlfanum(n).replace(/^([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{3})([0-9A-Z]{4})(\d{2})$/,'$1.$2.$3/$4-$5');}
 // CPF é dado pessoal (LGPD) — no log de auditoria mostra só os 2 últimos
 // dígitos, o suficiente pra rastrear sem expor o documento inteiro.
 function ddMascaraCpf(cpf){cpf=(cpf||'').replace(/\D/g,'');return cpf.length===11?`***.***.***-${cpf.slice(9)}`:'';}
@@ -266,7 +271,7 @@ function ddNorm(d,api){
 
 // ── AUTOFILL PJ ───────────────────────────
 async function pjAutoFill(){
-  const raw=ddV('pj-cnpj').replace(/\D/g,'');if(raw.length!==14)return;
+  const raw=ddSoAlfanum(ddV('pj-cnpj'));if(raw.length!==14)return;
   ddCnpjN=raw;
   const l=ddAddLog('pj','Pré-carregando dados do CNPJ...','spin');
   const apis=[{name:'BrasilAPI',url:`https://brasilapi.com.br/api/cnpj/v1/${raw}`},{name:'ReceitaWS',url:`https://www.receitaws.com.br/v1/cnpj/${raw}`},{name:'CNPJ.ws',url:`https://publica.cnpj.ws/cnpj/${raw}`}];
@@ -723,8 +728,8 @@ function pfRender(nome,cpf,cpfFmt,end,empresa,pep){
 
 // ── AÇÕES PJ ──────────────────────────────
 async function pjConsultar(){
-  const raw=ddV('pj-cnpj').replace(/\D/g,'');
-  if(raw.length!==14){alert('Informe um CNPJ válido com 14 dígitos.');return;}
+  const raw=ddSoAlfanum(ddV('pj-cnpj'));
+  if(raw.length!==14){alert('Informe um CNPJ válido com 14 caracteres.');return;}
   ddCnpjN=raw;
   if(typeof auditLog==='function') auditLog('pesquisa','due-diligence',`Consulta CNPJ ${ddFmt(raw)}`,{tipo:'cnpj'});
   const btn=document.getElementById('pj-btnapi');
@@ -748,7 +753,7 @@ async function pjConsultar(){
 // interno=true quando chamado pelo próprio pjConsultar() como fallback (todas
 // as APIs falharam) — evita logar a mesma pesquisa duas vezes.
 function pjSomenteLinks(interno){
-  const raw=ddV('pj-cnpj').replace(/\D/g,'');if(!raw){alert('Informe o CNPJ primeiro.');return;}
+  const raw=ddSoAlfanum(ddV('pj-cnpj'));if(!raw){alert('Informe o CNPJ primeiro.');return;}
   if(!interno && typeof auditLog==='function') auditLog('pesquisa','due-diligence',`Consulta CNPJ ${ddFmt(raw)} (links manuais)`,{tipo:'cnpj'});
   ddCnpjN=raw;const cnpjFmt=ddFmt(raw);
   const razao=ddV('pj-razao')||ddV('pj-fantasia')||cnpjFmt;
@@ -787,7 +792,7 @@ function pjBuildManLinks(cnpjNum){
 function ddToggleManual(prefix){
   const box=document.getElementById(prefix+'-manbox');const show=box.style.display==='none';
   box.style.display=show?'block':'none';
-  if(show&&prefix==='pj'){const raw=ddV('pj-cnpj').replace(/\D/g,'');if(raw.length===14){ddCnpjN=raw;pjBuildManLinks(raw);}}
+  if(show&&prefix==='pj'){const raw=ddSoAlfanum(ddV('pj-cnpj'));if(raw.length===14){ddCnpjN=raw;pjBuildManLinks(raw);}}
 }
 
 function ddParseManual(prefix){
