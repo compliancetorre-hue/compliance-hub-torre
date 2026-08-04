@@ -345,17 +345,27 @@ let dd2TodosProcessosCarregando = false;
 let dd2SociosData = [];
 let dd2SociosFalhou = false;
 
+// CNPJ alfanumérico (Receita Federal, regra nova de 2026): as 12 primeiras
+// posições (raiz + ordem) passam a aceitar letras A-Z além de números — só
+// os 2 dígitos verificadores finais continuam sempre numéricos. Uma limpeza
+// que só remove não-dígitos (\D) apaga as letras e corrompe o documento;
+// esta função remove só pontuação/espaço, mantendo letra e número. É segura
+// pra CPF também (CPF nunca teve letra, então não muda nada nele).
+function dd2SoAlfanum(v){
+  return (v||'').toUpperCase().replace(/[^0-9A-Z]/g,'');
+}
+
 function dd2FormatDoc(input){
   const tipo = document.getElementById('dd2-tipo').value;
-  let v = input.value.replace(/\D/g,'');
+  let v = input.value;
   if(tipo==='cnpj'){
-    v=v.substring(0,14);
-    v=v.replace(/(\d{2})(\d)/,'$1.$2');
-    v=v.replace(/(\d{3})(\d)/,'$1.$2');
-    v=v.replace(/(\d{3})(\d)/,'$1/$2');
-    v=v.replace(/(\d{4})(\d)/,'$1-$2');
+    v=dd2SoAlfanum(v).substring(0,14);
+    v=v.replace(/([0-9A-Z]{2})([0-9A-Z])/,'$1.$2');
+    v=v.replace(/([0-9A-Z]{3})([0-9A-Z])/,'$1.$2');
+    v=v.replace(/([0-9A-Z]{3})([0-9A-Z])/,'$1/$2');
+    v=v.replace(/([0-9A-Z]{4})([0-9A-Z])/,'$1-$2');
   } else {
-    v=v.substring(0,11);
+    v=v.replace(/\D/g,'').substring(0,11);
     v=v.replace(/(\d{3})(\d)/,'$1.$2');
     v=v.replace(/(\d{3})(\d)/,'$1.$2');
     v=v.replace(/(\d{3})(\d)/,'$1-$2');
@@ -388,8 +398,11 @@ function dd2SetProgress(pct){
 }
 
 async function dd2Iniciar(){
-  const doc=document.getElementById('dd2-doc').value.replace(/\D/g,'');
   const tipo=document.getElementById('dd2-tipo').value;
+  // CNPJ pode ter letra (ver dd2SoAlfanum) — CPF continua só dígito.
+  const doc=tipo==='cnpj'
+    ? dd2SoAlfanum(document.getElementById('dd2-doc').value)
+    : document.getElementById('dd2-doc').value.replace(/\D/g,'');
   // Só relevante pra CPF — pra CNPJ a razão social já vem da Receita Federal.
   const nomeManual=tipo==='cpf'?(document.getElementById('dd2-nome')?.value||'').trim():'';
   // Pra CPF, libera investigar só com o nome (sem documento) — útil quando
@@ -1019,7 +1032,7 @@ function dd2RenderCadastral(d){
   if(d.socios?.length){
     document.getElementById('dd2-sec-qsa').style.display='block';
     document.getElementById('dd2-qsa-content').innerHTML=`<div style="overflow-x:auto"><table class="dd2-table"><thead><tr><th>Nome</th><th>Qualificação</th><th>CNPJ (quando sócio é PJ)</th></tr></thead><tbody>${d.socios.map(s=>{
-      const docLimpo=(s.doc||'').replace(/\D/g,'');
+      const docLimpo=dd2SoAlfanum(s.doc);
       const cnpjCel=(s.tipoSocio==='PJ'&&docLimpo.length===14)?`<a href="https://cnpjtransparencia.com.br/cnpj/${docLimpo}" target="_blank" style="color:#0f2d4a;font-family:'DM Mono',monospace">${dd2FmtDoc(docLimpo,'cnpj')}</a>`:'—';
       return `<tr><td>${escapeHtml(s.nome)||'—'}</td><td>${escapeHtml(s.qual)||'—'}</td><td>${cnpjCel}</td></tr>`;
     }).join('')}</tbody></table></div>`;
@@ -1038,8 +1051,10 @@ function dd2RenderFiscal(d){
 }
 
 function dd2FmtDoc(docNum,tipo){
-  if(tipo==='cnpj')return docNum.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');
-  return docNum.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');
+  // Raiz+ordem (12 primeiras posições) podem ter letra; os 2 dígitos
+  // verificadores finais continuam sempre numéricos.
+  if(tipo==='cnpj')return dd2SoAlfanum(docNum).replace(/^([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{3})([0-9A-Z]{4})(\d{2})$/,'$1.$2.$3/$4-$5');
+  return (docNum||'').replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');
 }
 
 const DD2_DJEN_URL='https://comunicaapi.pje.jus.br/api/v1/comunicacao';
@@ -1644,7 +1659,8 @@ function dd2FetchTCUInidoneos(){
 
 function dd2TcuPorDocumento(items,docNum){
   if(!docNum)return[];
-  return items.filter(i=>(i.cpf_cnpj||'').replace(/\D/g,'')===docNum);
+  const alvo=dd2SoAlfanum(docNum);
+  return items.filter(i=>dd2SoAlfanum(i.cpf_cnpj)===alvo);
 }
 
 // Match por nome (pros sócios, que no QSA vêm sem CPF completo) — usa o
@@ -1923,7 +1939,7 @@ function dd2NomesBatem(nomeAlvo,nomeCandidato){
 // quando a consulta judicial está desligada/falhou = "não verificado".
 async function dd2InvestigarSocios(socios,djenItems,docAtual){
   const alvo=(socios||[]).filter(s=>s.nome).slice(0,DD2_SOCIOS_MAX);
-  const docAtualLimpo=(docAtual||'').replace(/\D/g,'');
+  const docAtualLimpo=dd2SoAlfanum(docAtual);
   const chamar=(rota,params)=>fetch(dd2PortalUrl(rota,params+'&pagina=1'),{headers:dd2PortalHeaders(),signal:AbortSignal.timeout(12000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(d=>Array.isArray(d)?d:[]);
   const judicialDoSocio=(nome)=>{
     if(!Array.isArray(djenItems))return null; // não verificado
@@ -1955,7 +1971,7 @@ async function dd2InvestigarSocios(socios,djenItems,docAtual){
     // Não faz sentido listar a própria empresa que está sendo investigada
     // como "outra empresa vinculada" — ela obviamente aparece no resultado,
     // não é achado novo nenhum.
-    const empresasVinculadas=pega(empresasR).filter(emp=>emp.cnpj!==docAtualLimpo);
+    const empresasVinculadas=pega(empresasR).filter(emp=>dd2SoAlfanum(emp.cnpj)!==docAtualLimpo);
     return{
       nome:s.nome,qual:s.qual||'',doc:s.doc||'',tipoSocio:s.tipoSocio||'',
       pep:pega(pepR).filter(p=>dd2NomesBatem(s.nome,p.nome||'')),
@@ -2030,7 +2046,7 @@ function dd2RenderSocios(lista){
     // CNPJ do sócio só vem "limpo" (sem máscara) quando ele é pessoa jurídica
     // — CPF de pessoa física vem sempre mascarado pela Receita (ex.:
     // "***866757**") e não deve ser exibido/linkado.
-    const docLimpo=(s.doc||'').replace(/\D/g,'');
+    const docLimpo=dd2SoAlfanum(s.doc);
     const cnpjSocioHtml=(s.tipoSocio==='PJ'&&docLimpo.length===14)
       ?`<a href="https://cnpjtransparencia.com.br/cnpj/${docLimpo}" target="_blank" onclick="event.stopPropagation()" style="color:#0f2d4a;font-size:.75rem;font-family:'DM Mono',monospace">${dd2FmtDoc(docLimpo,'cnpj')}</a>`
       :'';
@@ -2516,7 +2532,7 @@ async function dd2RadarAdicionarManual(){
 async function dd2RadarAdicionar(tipo,doc,nome){
   nome=(nome||'').trim();
   if(!nome){alert('Informe o nome ou razão social pra adicionar ao Radar.');return false;}
-  const docLimpo=(doc||'').replace(/\D/g,'');
+  const docLimpo=tipo==='cnpj'?dd2SoAlfanum(doc):(doc||'').replace(/\D/g,'');
   const row={id:Date.now(),tipo,doc:docLimpo||null,nome,criado_em:new Date().toISOString(),ultima_verificacao:null,snapshot:null,ultimo_resultado:null};
   try{
     await sbInsert('dd2_radar',row);
