@@ -236,7 +236,7 @@ function doLogout() {
 }
 
 function showForgotPass() {
-  alert('Para recuperar sua senha, entre em contato com o administrador do sistema.\n\nE-mail: admin@torre.com.br');
+  alert('Para recuperar sua senha, entre em contato com o administrador do sistema.');
 }
 
 // Shake keyframe via style tag
