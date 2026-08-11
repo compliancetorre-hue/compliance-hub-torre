@@ -4,6 +4,7 @@
 let fbCurrentView = 'planos-acao';
 let fbDragCard = null;
 let fbDragSrcCol = null;
+let fbDragCol = null;
 
 function fbSetView(view, el) {
   fbCurrentView = view;
@@ -32,20 +33,41 @@ function renderFlowboard() {
     const colEl = document.createElement('div');
     colEl.className = 'fb-col';
     colEl.dataset.colId = col.id;
+    // dragover/drop serve tanto pra soltar um CARD dentro da coluna quanto
+    // pra soltar a própria COLUNA (arrastada pelo cabeçalho) numa posição
+    // nova — diferenciados por qual variável de drag está ativa no momento.
     colEl.addEventListener('dragover', e => { e.preventDefault(); colEl.classList.add('drag-over'); });
     colEl.addEventListener('dragleave', () => colEl.classList.remove('drag-over'));
-    colEl.addEventListener('drop', e => { e.preventDefault(); colEl.classList.remove('drag-over'); fbDrop(col.id); });
+    colEl.addEventListener('drop', e => {
+      e.preventDefault();
+      colEl.classList.remove('drag-over');
+      if(fbDragCol) fbDropCol(col.id);
+      else fbDrop(col.id);
+    });
 
     colEl.innerHTML = `
       <div class="fb-col-header">
         <div class="fb-col-dot" style="background:${col.color}"></div>
         <div class="fb-col-name">${col.name}</div>
         <div class="fb-col-count">${col.cards.length}</div>
+        <button class="fb-col-menu" title="Excluir coluna" onclick="fbDeleteCol('${col.id}')">🗑</button>
       </div>
       <div class="fb-cards" id="cards-${col.id}"></div>
       <button class="fb-add-card" onclick="fbAddCard('${col.id}')">+ Adicionar card</button>
     `;
     kanban.appendChild(colEl);
+
+    // Arrasta a coluna inteira pelo cabeçalho (igual ao card, mas segurando
+    // no título em vez de num card) — só o cabeçalho é arrastável, não a
+    // coluna toda, senão um clique-e-arraste num card dentro dela poderia
+    // ser interpretado como arrastar a coluna.
+    const headerEl = colEl.querySelector('.fb-col-header');
+    headerEl.draggable = true;
+    headerEl.addEventListener('dragstart', () => {
+      fbDragCol = col.id; fbDragCard = null; fbDragSrcCol = null;
+      colEl.classList.add('col-dragging');
+    });
+    headerEl.addEventListener('dragend', () => { colEl.classList.remove('col-dragging'); fbDragCol = null; });
 
     const cardsEl = colEl.querySelector(`#cards-${col.id}`);
     col.cards.forEach(card => {
@@ -275,6 +297,41 @@ function fbAddCol() {
   const id = 'col' + Date.now();
   const colors = ['#94a3b8','#3b82f6','#f59e0b','#00c49a','#8b5cf6','#ef4444'];
   board.cols.push({ id, name, color: colors[board.cols.length % colors.length], cards: [] });
+  renderFlowboard();
+  saveLocalCache();
+  setSaveIndicator('⏳ Salvando...','var(--warn)');
+  sbSaveFbBoards().then(() => setSaveIndicator('☁️ FlowBoard salvo','var(--accent)'))
+                  .catch(() => setSaveIndicator('⚠️ Erro ao salvar na nuvem','var(--danger)'));
+}
+
+// Solta a coluna arrastada (fbDragCol) na posição da coluna-alvo.
+function fbDropCol(targetColId) {
+  const board = DB.fbBoards[fbCurrentView];
+  const draggedId = fbDragCol;
+  fbDragCol = null;
+  if(!draggedId || draggedId === targetColId) return;
+  const fromIdx = board.cols.findIndex(c => c.id === draggedId);
+  const toIdx = board.cols.findIndex(c => c.id === targetColId);
+  if(fromIdx === -1 || toIdx === -1) return;
+  const [col] = board.cols.splice(fromIdx, 1);
+  board.cols.splice(toIdx, 0, col);
+  renderFlowboard();
+  saveLocalCache();
+  setSaveIndicator('⏳ Salvando...','var(--warn)');
+  sbSaveFbBoards().then(() => setSaveIndicator('☁️ FlowBoard salvo','var(--accent)'))
+                  .catch(() => setSaveIndicator('⚠️ Erro ao salvar na nuvem','var(--danger)'));
+}
+
+function fbDeleteCol(colId) {
+  const board = DB.fbBoards[fbCurrentView];
+  if(board.cols.length <= 1) { alert('O quadro precisa de pelo menos uma coluna.'); return; }
+  const col = board.cols.find(c => c.id === colId);
+  if(!col) return;
+  const msg = col.cards.length
+    ? `Excluir a coluna "${col.name}"? Ela tem ${col.cards.length} card(s), que também serão excluídos.`
+    : `Excluir a coluna "${col.name}"?`;
+  if(!confirm(msg)) return;
+  board.cols = board.cols.filter(c => c.id !== colId);
   renderFlowboard();
   saveLocalCache();
   setSaveIndicator('⏳ Salvando...','var(--warn)');
